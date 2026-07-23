@@ -1,0 +1,42 @@
+{
+  "name": "sparasaljslang",
+  "version": "1.0.0",
+  "description": "Enkel webbapp för att bestämma om ett föremål ska sparas, säljas eller slängas.",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "test": "echo \"No tests configured\" && exit 0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JFSvensson/SparaSaljSlang.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/JFSvensson/SparaSaljSlang/issues"
+  },
+  "homepage": "https://github.com/JFSvensson/SparaSaljSlang#readme",
+  "dependencies": {
+    "better-sqlite3": "^13.0.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.0",
+    "multer": "^2.2.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.1": true
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.1.1",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^7.0.2"
+  }
+}
