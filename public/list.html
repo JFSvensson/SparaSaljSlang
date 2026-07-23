@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SparaSäljSlang – Alla föremål</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>🗃️ SparaSäljSlang</h1>
+    <nav>
+      <a href="index.html">Bedöm föremål</a>
+      <a href="list.html" class="active">Alla föremål</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Alla uppladdade föremål</h2>
+      <p id="list-status" class="status-msg"></p>
+      <div id="items-grid" class="items-grid"></div>
+    </section>
+  </main>
+
+  <!-- Item detail modal -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content card">
+      <button id="modal-close" class="modal-close" aria-label="Stäng">✕</button>
+      <img id="modal-image" src="" alt="Föremål" />
+      <h3 id="modal-name"></h3>
+      <div class="vote-bars">
+        <div class="vote-row">
+          <span class="vote-label">💚 Spara</span>
+          <div class="bar-bg"><div id="modal-bar-save" class="bar bar-save"></div></div>
+          <span id="modal-count-save" class="vote-count">0</span>
+        </div>
+        <div class="vote-row">
+          <span class="vote-label">💰 Sälj</span>
+          <div class="bar-bg"><div id="modal-bar-sell" class="bar bar-sell"></div></div>
+          <span id="modal-count-sell" class="vote-count">0</span>
+        </div>
+        <div class="vote-row">
+          <span class="vote-label">🗑️ Släng</span>
+          <div class="bar-bg"><div id="modal-bar-throw" class="bar bar-throw"></div></div>
+          <span id="modal-count-throw" class="vote-count">0</span>
+        </div>
+      </div>
+      <p class="modal-verdict" id="modal-verdict"></p>
+      <div class="modal-actions">
+        <button id="modal-delete" class="btn btn-throw">🗑️ Ta bort föremål</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="list.js"></script>
+</body>
+</html>

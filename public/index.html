@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SparaSäljSlang</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>🗃️ SparaSäljSlang</h1>
+    <nav>
+      <a href="index.html" class="active">Bedöm föremål</a>
+      <a href="list.html">Alla föremål</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Upload section -->
+    <section id="upload-section" class="card">
+      <h2>Ladda upp ett föremål</h2>
+      <form id="upload-form" enctype="multipart/form-data">
+        <label for="image-input" class="file-label">
+          <span id="file-label-text">Välj en bild…</span>
+          <input type="file" id="image-input" name="image" accept="image/*" required />
+        </label>
+        <button type="submit" class="btn btn-upload">Ladda upp</button>
+      </form>
+      <p id="upload-status" class="status-msg"></p>
+    </section>
+
+    <!-- Item viewer -->
+    <section id="viewer-section" class="card hidden">
+      <h2 id="viewer-title">Vad ska hända med detta?</h2>
+      <div id="image-wrapper">
+        <img id="item-image" src="" alt="Föremål" />
+        <p id="item-name" class="item-name"></p>
+      </div>
+
+      <div class="choice-buttons">
+        <button class="btn btn-save" data-choice="save">💚 Spara</button>
+        <button class="btn btn-sell" data-choice="sell">💰 Sälj</button>
+        <button class="btn btn-throw" data-choice="throw">🗑️ Släng</button>
+      </div>
+
+      <div id="vote-result" class="vote-result hidden">
+        <h3>Röster hittills</h3>
+        <div class="vote-bars">
+          <div class="vote-row">
+            <span class="vote-label">💚 Spara</span>
+            <div class="bar-bg"><div id="bar-save" class="bar bar-save"></div></div>
+            <span id="count-save" class="vote-count">0</span>
+          </div>
+          <div class="vote-row">
+            <span class="vote-label">💰 Sälj</span>
+            <div class="bar-bg"><div id="bar-sell" class="bar bar-sell"></div></div>
+            <span id="count-sell" class="vote-count">0</span>
+          </div>
+          <div class="vote-row">
+            <span class="vote-label">🗑️ Släng</span>
+            <div class="bar-bg"><div id="bar-throw" class="bar bar-throw"></div></div>
+            <span id="count-throw" class="vote-count">0</span>
+          </div>
+        </div>
+        <button id="next-btn" class="btn btn-next">Nästa föremål →</button>
+      </div>
+    </section>
+
+    <section id="empty-section" class="card hidden">
+      <p>Inga föremål finns ännu. Ladda upp det första!</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
