@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SparaSäljSlang</title>
+  <title>SparaSäljSläng</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -12,23 +12,11 @@
     <nav>
       <a href="index.html" class="active">Bedöm föremål</a>
       <a href="list.html">Alla föremål</a>
+      <a href="upload.html">Ladda upp föremål</a>
     </nav>
   </header>
 
   <main>
-    <!-- Upload section -->
-    <section id="upload-section" class="card">
-      <h2>Ladda upp ett föremål</h2>
-      <form id="upload-form" enctype="multipart/form-data">
-        <label for="image-input" class="file-label">
-          <span id="file-label-text">Välj en bild…</span>
-          <input type="file" id="image-input" name="image" accept="image/*" required />
-        </label>
-        <button type="submit" class="btn btn-upload">Ladda upp</button>
-      </form>
-      <p id="upload-status" class="status-msg"></p>
-    </section>
-
     <!-- Item viewer -->
     <section id="viewer-section" class="card hidden">
       <h2 id="viewer-title">Vad ska hända med detta?</h2>
