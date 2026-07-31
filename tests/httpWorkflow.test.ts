@@ -181,6 +181,45 @@ test('HTTP workflow persists a valid vote and returns updated counts', async () 
   assert.deepEqual(voteResult.counts, { save: 1, sell: 0, throw: 0 });
 });
 
+test('HTTP workflow rejects files larger than 10 MB', async () => {
+  const authenticatedCookie = await login();
+  const token = await getCsrfToken(authenticatedCookie);
+  const formData = new FormData();
+  formData.append(
+    'image',
+    new Blob([new Uint8Array(10 * 1024 * 1024 + 1)], { type: 'image/png' }),
+    'too-large.png'
+  );
+
+  const response = await fetch(`${baseUrl}/api/items`, {
+    method: 'POST',
+    headers: { Cookie: authenticatedCookie, 'x-csrf-token': token },
+    body: formData,
+  });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'File too large' });
+});
+
+test('HTTP workflow enforces the upload rate limit', async () => {
+  const authenticatedCookie = await login();
+  let limitedResponse: Response | undefined;
+
+  for (let attempt = 0; attempt < 21; attempt += 1) {
+    const response = await uploadImageRequest(authenticatedCookie, `rate-limit-${attempt}.png`);
+    if (response.status === 429) {
+      limitedResponse = response;
+      break;
+    }
+    assert.equal(response.status, 201);
+  }
+
+  assert.ok(limitedResponse, 'Expected the upload rate limit to reject a request');
+  assert.equal(limitedResponse.status, 429);
+  assert.deepEqual(await limitedResponse.json(), {
+    error: 'Upload limit reached, please try again later.',
+  });
+});
+
 async function createSession(): Promise<{ cookie: string }> {
   const response = await fetch(`${baseUrl}/api/csrf-token`);
   assert.equal(response.status, 200);
@@ -207,6 +246,12 @@ async function uploadImage(
   cookie: string,
   originalName: string
 ): Promise<{ id: number; filename: string; original_name: string }> {
+  const response = await uploadImageRequest(cookie, originalName);
+  assert.equal(response.status, 201);
+  return await response.json() as { id: number; filename: string; original_name: string };
+}
+
+async function uploadImageRequest(cookie: string, originalName: string): Promise<Response> {
   const token = await getCsrfToken(cookie);
   const formData = new FormData();
   formData.append(
@@ -215,13 +260,11 @@ async function uploadImage(
     originalName
   );
 
-  const response = await fetch(`${baseUrl}/api/items`, {
+  return fetch(`${baseUrl}/api/items`, {
     method: 'POST',
     headers: { Cookie: cookie, 'x-csrf-token': token },
     body: formData,
   });
-  assert.equal(response.status, 201);
-  return await response.json() as { id: number; filename: string; original_name: string };
 }
 
 async function getCsrfToken(cookie: string): Promise<string> {
