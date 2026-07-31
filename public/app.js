@@ -4,6 +4,7 @@
 (function () {
   'use strict';
 
+  const api = window.__appApi;
   const uploadForm = /** @type {HTMLFormElement} */ (document.getElementById('upload-form'));
   const imageInput = /** @type {HTMLInputElement} */ (document.getElementById('image-input'));
   const fileLabelText = document.getElementById('file-label-text');
@@ -68,9 +69,7 @@
 
   async function loadItems() {
     try {
-      const res = await fetch('/api/items');
-      if (!res.ok) throw new Error('Kunde inte hämta föremål');
-      items = await res.json();
+      items = await api.get('/items');
       if (items.length === 0) {
         showEmpty();
       } else {
@@ -106,12 +105,7 @@
       formData.append('image', imageInput.files[0]);
       setStatus('Laddar upp…');
       try {
-        const res = await fetch('/api/items', { method: 'POST', body: formData });
-        if (!res.ok) {
-          const body = await res.json();
-          throw new Error(body.error || 'Uppladdning misslyckades');
-        }
-        const newItem = await res.json();
+        const newItem = await api.post('/items', formData);
         setStatus('Uppladdning klar!', 'success');
         uploadForm.reset();
         if (fileLabelText) fileLabelText.textContent = 'Välj en bild…';
@@ -133,16 +127,7 @@
       if (!choice) return;
       choiceButtons.forEach((b) => b.setAttribute('disabled', 'true'));
       try {
-        const res = await fetch('/api/items/' + currentItemId + '/choices', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ choice }),
-        });
-        if (!res.ok) {
-          const body = await res.json();
-          throw new Error(body.error || 'Kunde inte spara val');
-        }
-        const data = await res.json();
+        const data = await api.post('/items/' + currentItemId + '/choices', { choice });
         updateBars(data.counts.save, data.counts.sell, data.counts.throw);
         if (voteResult) voteResult.classList.remove('hidden');
       } catch (err) {
@@ -161,11 +146,7 @@
 
       deleteCurrentBtn.setAttribute('disabled', 'true');
       try {
-        const res = await fetch('/api/items/' + currentItemId, { method: 'DELETE' });
-        if (!res.ok) {
-          const body = await res.json();
-          throw new Error(body.error || 'Borttagning misslyckades');
-        }
+        await api.delete('/items/' + currentItemId);
 
         items = items.filter((item) => item.id !== currentItemId);
         if (items.length === 0) {
