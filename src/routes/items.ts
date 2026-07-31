@@ -5,6 +5,7 @@ import path from 'path';
 import { ItemService } from '../services/itemService';
 import { config } from '../config';
 import { isAllowedChoice, isAllowedImageMimeType, parsePositiveInt } from '../validation';
+import { HttpError } from '../errors';
 
 const router = Router();
 const itemService = new ItemService();
@@ -53,13 +54,11 @@ router.get('/:id', (req: Request, res: Response) => {
   const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parsePositiveInt(idParam);
   if (id === null) {
-    res.status(400).json({ error: 'Invalid id' });
-    return;
+    throw new HttpError(400, 'Invalid id');
   }
   const item = itemService.getItem(id);
   if (!item) {
-    res.status(404).json({ error: 'Item not found' });
-    return;
+    throw new HttpError(404, 'Item not found');
   }
   res.json(item);
 });
@@ -70,9 +69,7 @@ router.post(
   (req: Request, res: Response, next: NextFunction) => {
     upload.single('image')(req, res, (err: unknown) => {
       if (err) {
-        const message =
-          err instanceof Error ? err.message : 'Upload failed';
-        res.status(400).json({ error: message });
+        next(new HttpError(400, err instanceof Error ? err.message : 'Upload failed'));
         return;
       }
       next();
@@ -80,8 +77,7 @@ router.post(
   },
   (req: Request, res: Response) => {
     if (!req.file) {
-      res.status(400).json({ error: 'No image file provided' });
-      return;
+      throw new HttpError(400, 'No image file provided');
     }
     const item = itemService.createItem(req.file.filename, req.file.originalname);
     res.status(201).json(item);
@@ -93,8 +89,7 @@ router.delete('/:id', (req: Request, res: Response) => {
   const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parsePositiveInt(idParam);
   if (id === null) {
-    res.status(400).json({ error: 'Invalid id' });
-    return;
+    throw new HttpError(400, 'Invalid id');
   }
 
   try {
@@ -102,7 +97,7 @@ router.delete('/:id', (req: Request, res: Response) => {
     res.json({ message: 'Item deleted' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Item not found';
-    res.status(404).json({ error: message });
+    throw new HttpError(404, message);
   }
 });
 
@@ -111,13 +106,11 @@ router.get('/:id/choices', (req: Request, res: Response) => {
   const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parsePositiveInt(idParam);
   if (id === null) {
-    res.status(400).json({ error: 'Invalid id' });
-    return;
+    throw new HttpError(400, 'Invalid id');
   }
   const result = itemService.getChoices(id);
   if (!result) {
-    res.status(404).json({ error: 'Item not found' });
-    return;
+    throw new HttpError(404, 'Item not found');
   }
   res.json(result);
 });
@@ -127,18 +120,15 @@ router.post('/:id/choices', (req: Request, res: Response) => {
   const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parsePositiveInt(idParam);
   if (id === null) {
-    res.status(400).json({ error: 'Invalid id' });
-    return;
+    throw new HttpError(400, 'Invalid id');
   }
   const { choice } = req.body as { choice: string };
   if (!isAllowedChoice(choice)) {
-    res.status(400).json({ error: 'Choice must be one of: save, sell, throw' });
-    return;
+    throw new HttpError(400, 'Choice must be one of: save, sell, throw');
   }
   const result = itemService.submitChoice(id, choice as 'save' | 'sell' | 'throw');
   if (!result) {
-    res.status(404).json({ error: 'Item not found' });
-    return;
+    throw new HttpError(404, 'Item not found');
   }
   res.status(201).json({ choice: result.choice, counts: result.counts });
 });

@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import itemsRouter from './routes/items';
 import { config } from './config';
 import { authenticateUser } from './auth';
+import { toPublicError } from './errors';
 
 const app = express();
 const PORT = config.port;
@@ -104,7 +105,8 @@ app.use('/api/items', uploadLimiter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
+  const publicError = toPublicError(err);
+  res.status(publicError.status).json(publicError.body);
 });
 
 app.listen(PORT, () => {
