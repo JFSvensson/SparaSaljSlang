@@ -6,6 +6,7 @@
 
   const api = window.__appApi;
   const ui = window.__ui;
+  const components = window.__components;
   const uploadForm = /** @type {HTMLFormElement} */ (document.getElementById('upload-form'));
   const imageInput = /** @type {HTMLInputElement} */ (document.getElementById('image-input'));
   const fileLabelText = document.getElementById('file-label-text');
@@ -17,6 +18,7 @@
   const voteResult = document.getElementById('vote-result');
   const nextBtn = document.getElementById('next-btn');
   const deleteCurrentBtn = document.getElementById('delete-current-btn');
+  const logoutBtn = document.getElementById('logout-btn');
   const choiceButtons = document.querySelectorAll('.choice-buttons .btn');
 
   /** @type {{ id: number; filename: string; original_name: string }[]} */
@@ -161,6 +163,19 @@
         setStatus(String(err), 'error');
       } finally {
         deleteCurrentBtn.removeAttribute('disabled');
+      }
+    });
+  }
+
+  // ── Logout ───────────────────────────────────────────────────────
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await api.post('/logout', {});
+        window.location.href = '/login.html';
+      } catch (err) {
+        setStatus(String(err), 'error');
       }
     });
   }

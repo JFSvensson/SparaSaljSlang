@@ -66,6 +66,22 @@ nav a.active {
   color: var(--color-text);
 }
 
+.nav-btn {
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+}
+
+.nav-btn:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
 /* ── Main / Cards ───────────────────────────────────── */
 main {
   max-width: 700px;
