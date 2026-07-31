@@ -29,6 +29,12 @@ Enkel webbapp för att bestämma om ett föremål ska sparas, säljas eller slä
    npm run dev
    ```
 
+För att köra den byggda produktionsversionen:
+```bash
+npm run build
+npm start
+```
+
 ## Användning
 - Öppna appen i webbläsaren på http://localhost:3000
 - Logga in med användarnamn och lösenord som ställts in via miljövariabler

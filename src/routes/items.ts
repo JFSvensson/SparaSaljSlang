@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer, { FileFilterCallback } from 'multer';
+import rateLimit from 'express-rate-limit';
 import fs from 'fs';
 import path from 'path';
 import { ItemService } from '../services/itemService';
@@ -43,6 +44,14 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
 });
 
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Upload limit reached, please try again later.' },
+});
+
 // GET /api/items — list all items with choice counts
 router.get('/', (_req: Request, res: Response) => {
   const items = itemService.listItems();
@@ -66,6 +75,7 @@ router.get('/:id', (req: Request, res: Response) => {
 // POST /api/items — upload a new item
 router.post(
   '/',
+  uploadLimiter,
   (req: Request, res: Response, next: NextFunction) => {
     upload.single('image')(req, res, (err: unknown) => {
       if (err) {

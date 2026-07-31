@@ -33,14 +33,6 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' },
 });
 
-const uploadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Upload limit reached, please try again later.' },
-});
-
 app.use((req, res, next) => {
   const pathname = req.path;
   const isStaticAsset = /\.(css|js|png|jpe?g|gif|svg|ico|webp|map)$/i.test(pathname);
@@ -49,6 +41,7 @@ app.use((req, res, next) => {
     pathname === '/login.html' ||
     pathname === '/api/login' ||
     pathname === '/api/logout' ||
+    pathname === '/api/health' ||
     pathname.startsWith('/uploads/');
 
   if (isAllowedPath || isStaticAsset || pathname === '/favicon.ico') {
@@ -91,6 +84,10 @@ app.post('/api/logout', (_req, res) => {
   return res.json({ ok: true });
 });
 
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // Serve uploaded images
 app.use('/uploads', express.static(config.uploadsDir));
 
@@ -99,9 +96,6 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // API routes
 app.use('/api/items', apiLimiter, itemsRouter);
-
-// Stricter rate limit on upload endpoint
-app.use('/api/items', uploadLimiter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
