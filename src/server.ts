@@ -9,7 +9,8 @@ import { authenticateUser } from './auth';
 import { toPublicError } from './errors';
 import { SqliteSessionStore } from './sessionStore';
 import { csrfSynchronisedProtection, generateToken } from './csrf';
-import { isDatabaseAvailable } from './db';
+import { closeDatabase, isDatabaseAvailable } from './db';
+import { closeResources } from './shutdown';
 
 validateConfig();
 const app = express();
@@ -159,8 +160,35 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(publicError.status).json(publicError.body);
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`SparaSäljSlang running at http://localhost:${PORT}`);
 });
+
+let shutdownStarted = false;
+
+function shutdown(signal: NodeJS.Signals): void {
+  if (shutdownStarted) {
+    return;
+  }
+
+  shutdownStarted = true;
+  console.log(`Received ${signal}; shutting down gracefully.`);
+
+  const shutdownTimeout = setTimeout(() => {
+    console.error('Graceful shutdown timed out.');
+    process.exit(1);
+  }, 10_000);
+  shutdownTimeout.unref();
+
+  void closeResources(server, closeDatabase)
+    .then(() => process.exit(0))
+    .catch((error: unknown) => {
+      console.error('Graceful shutdown failed.', error);
+      process.exit(1);
+    });
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
 
 export default app;

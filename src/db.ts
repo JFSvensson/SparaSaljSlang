@@ -44,6 +44,12 @@ export function isDatabaseAvailable(database: HealthDatabase = db): boolean {
   }
 }
 
+export function closeDatabase(): void {
+  if (db.open) {
+    db.close();
+  }
+}
+
 export interface Item {
   id: number;
   filename: string;
