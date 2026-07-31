@@ -5,10 +5,10 @@
 - Validering, felkontrakt, rate limiting och filnamnsnormalisering.
 - SQLite-hälsokontroll, strukturerad loggning och kontrollerad avstängning.
 - Docker- och Compose-underlag för VPS samt GitHub Actions CI.
-- Enhetstester och ett isolerat HTTP-flödestest för inloggning, CSRF och utloggning.
+- Enhetstester och isolerade HTTP-flödestester för inloggning, CSRF, uppladdning, röstning och borttagning.
 
 ## Nästa steg
-1. Slutför HTTP-tester för uppladdning, röstning, borttagning och negativa fall.
+1. Lägg till två kvarvarande HTTP-gränsfall: för stor uppladdning och uppladdningsbegränsning.
 2. Förbättra uppladdningen med bildförhandsvisning, klientvalidering av storlek och drag-and-drop.
 3. Verifiera Docker Compose på en Docker-värd och dokumentera reverse-proxy-konfiguration för HTTPS.
 4. Lägg till små driftsförbättringar vid behov: backup-rutin, återställningsövning och loggövervakning.

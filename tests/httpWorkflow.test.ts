@@ -126,6 +126,61 @@ test('HTTP workflow uploads a valid image, normalizes its display name, and remo
   assert.equal(missingItemResponse.status, 404);
 });
 
+test('HTTP workflow rejects invalid uploads and invalid item IDs', async () => {
+  const authenticatedCookie = await login();
+  const token = await getCsrfToken(authenticatedCookie);
+  const nonImageFormData = new FormData();
+  nonImageFormData.append(
+    'image',
+    new Blob(['not-an-image'], { type: 'text/plain' }),
+    'notes.txt'
+  );
+
+  const nonImageResponse = await fetch(`${baseUrl}/api/items`, {
+    method: 'POST',
+    headers: { Cookie: authenticatedCookie, 'x-csrf-token': token },
+    body: nonImageFormData,
+  });
+  assert.equal(nonImageResponse.status, 400);
+
+  const missingFileToken = await getCsrfToken(authenticatedCookie);
+  const missingFileResponse = await fetch(`${baseUrl}/api/items`, {
+    method: 'POST',
+    headers: { Cookie: authenticatedCookie, 'x-csrf-token': missingFileToken },
+    body: new FormData(),
+  });
+  assert.equal(missingFileResponse.status, 400);
+
+  const invalidIdResponse = await fetch(`${baseUrl}/api/items/not-an-id`, {
+    headers: { Cookie: authenticatedCookie },
+  });
+  assert.equal(invalidIdResponse.status, 400);
+});
+
+test('HTTP workflow persists a valid vote and returns updated counts', async () => {
+  const authenticatedCookie = await login();
+  const item = await uploadImage(authenticatedCookie, 'vote-target.png');
+  const voteToken = await getCsrfToken(authenticatedCookie);
+
+  const voteResponse = await fetch(`${baseUrl}/api/items/${item.id}/choices`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: authenticatedCookie,
+      'x-csrf-token': voteToken,
+    },
+    body: JSON.stringify({ choice: 'save' }),
+  });
+  assert.equal(voteResponse.status, 201);
+  const voteResult = await voteResponse.json() as {
+    choice: { item_id: number; choice: string };
+    counts: { save: number; sell: number; throw: number };
+  };
+  assert.equal(voteResult.choice.item_id, item.id);
+  assert.equal(voteResult.choice.choice, 'save');
+  assert.deepEqual(voteResult.counts, { save: 1, sell: 0, throw: 0 });
+});
+
 async function createSession(): Promise<{ cookie: string }> {
   const response = await fetch(`${baseUrl}/api/csrf-token`);
   assert.equal(response.status, 200);
@@ -146,6 +201,27 @@ async function login(): Promise<string> {
   });
   assert.equal(response.status, 200);
   return readSessionCookie(response);
+}
+
+async function uploadImage(
+  cookie: string,
+  originalName: string
+): Promise<{ id: number; filename: string; original_name: string }> {
+  const token = await getCsrfToken(cookie);
+  const formData = new FormData();
+  formData.append(
+    'image',
+    new Blob(['image-content'], { type: 'image/png' }),
+    originalName
+  );
+
+  const response = await fetch(`${baseUrl}/api/items`, {
+    method: 'POST',
+    headers: { Cookie: cookie, 'x-csrf-token': token },
+    body: formData,
+  });
+  assert.equal(response.status, 201);
+  return await response.json() as { id: number; filename: string; original_name: string };
 }
 
 async function getCsrfToken(cookie: string): Promise<string> {
