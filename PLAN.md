@@ -6,11 +6,11 @@
 - SQLite-hälsokontroll, strukturerad loggning och kontrollerad avstängning.
 - Docker- och Compose-underlag för VPS samt GitHub Actions CI.
 - Enhetstester och isolerade HTTP-flödestester för inloggning, CSRF, uppladdning, röstning och borttagning, inklusive filstorlek och rate limiting.
+- Uppladdningsflöde med lokal bildförhandsvisning, klientvalidering av typ och storlek samt drag-and-drop.
 
 ## Nästa steg
-1. Förbättra uppladdningen med bildförhandsvisning, klientvalidering av storlek och drag-and-drop.
-2. Verifiera Docker Compose på en Docker-värd och dokumentera reverse-proxy-konfiguration för HTTPS.
-3. Lägg till små driftsförbättringar vid behov: backup-rutin, återställningsövning och loggövervakning.
+1. Verifiera Docker Compose på en Docker-värd och dokumentera reverse-proxy-konfiguration för HTTPS.
+2. Lägg till små driftsförbättringar vid behov: backup-rutin, återställningsövning och loggövervakning.
 
 ## Principer
 - Behåll Express, SQLite och statisk vanilla-frontend tills produktens komplexitet motiverar en större förändring.

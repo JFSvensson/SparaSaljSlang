@@ -13,9 +13,9 @@
       <span class="header-pill">Ladda upp</span>
     </div>
     <nav>
-      <a href="index.html" class="active">Bedöm föremål</a>
+      <a href="index.html">Bedöm föremål</a>
       <a href="list.html">Alla föremål</a>
-      <a href="upload.html">Ladda upp föremål</a>
+      <a href="upload.html" class="active">Ladda upp föremål</a>
       <button id="logout-btn" class="nav-btn">Logga ut</button>
     </nav>
   </header>
@@ -25,10 +25,14 @@
     <section id="upload-section" class="card">
       <h2>Ladda upp ett föremål</h2>
       <form id="upload-form" enctype="multipart/form-data">
-        <label for="image-input" class="file-label">
+        <label for="image-input" id="upload-dropzone" class="file-label">
           <span id="file-label-text">Välj en bild…</span>
+          <span class="file-label-hint">PNG, JPEG, GIF eller WebP. Max 10 MB.</span>
           <input type="file" id="image-input" name="image" accept="image/*" required />
         </label>
+        <div id="image-preview" class="image-preview hidden">
+          <img id="image-preview-image" alt="Förhandsvisning av vald bild" />
+        </div>
         <button type="submit" class="btn btn-upload">Ladda upp</button>
       </form>
       <p id="upload-status" class="status-msg"></p>
@@ -39,6 +43,8 @@
     </section>
   </main>
 
+  <script src="client.js"></script>
+  <script src="ui.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

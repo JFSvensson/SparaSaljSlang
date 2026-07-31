@@ -9,8 +9,12 @@
   const components = window.__components;
   const uploadForm = /** @type {HTMLFormElement} */ (document.getElementById('upload-form'));
   const imageInput = /** @type {HTMLInputElement} */ (document.getElementById('image-input'));
+  const uploadDropzone = document.getElementById('upload-dropzone');
   const fileLabelText = document.getElementById('file-label-text');
+  const imagePreview = document.getElementById('image-preview');
+  const imagePreviewImage = /** @type {HTMLImageElement} */ (document.getElementById('image-preview-image'));
   const uploadStatus = document.getElementById('upload-status');
+  const uploadButton = uploadForm && uploadForm.querySelector('button[type="submit"]');
   const viewerSection = document.getElementById('viewer-section');
   const emptySection = document.getElementById('empty-section');
   const itemImage = /** @type {HTMLImageElement} */ (document.getElementById('item-image'));
@@ -25,6 +29,10 @@
   let items = [];
   let currentIndex = 0;
   let currentItemId = -1;
+  let selectedFile = null;
+  let previewUrl = null;
+  const maxUploadBytes = 10 * 1024 * 1024;
+  const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
   // ── Helpers ──────────────────────────────────────────────────────
 
@@ -66,6 +74,35 @@
     if (emptySection) emptySection.classList.remove('hidden');
   }
 
+  function clearSelectedFile() {
+    selectedFile = null;
+    if (imageInput) imageInput.value = '';
+    if (fileLabelText) fileLabelText.textContent = 'Välj en bild…';
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    if (imagePreviewImage) imagePreviewImage.removeAttribute('src');
+    if (imagePreview) imagePreview.classList.add('hidden');
+  }
+
+  function selectFile(file) {
+    if (!allowedImageTypes.has(file.type)) {
+      setStatus('Välj en PNG-, JPEG-, GIF- eller WebP-bild.', 'error');
+      return;
+    }
+    if (file.size > maxUploadBytes) {
+      setStatus('Bilden får vara högst 10 MB.', 'error');
+      return;
+    }
+
+    selectedFile = file;
+    if (fileLabelText) fileLabelText.textContent = file.name;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
+    if (imagePreviewImage) imagePreviewImage.src = previewUrl;
+    if (imagePreview) imagePreview.classList.remove('hidden');
+    setStatus('');
+  }
+
   // ── Load items ────────────────────────────────────────────────────
 
   async function loadItems() {
@@ -88,33 +125,54 @@
   if (imageInput && fileLabelText) {
     imageInput.addEventListener('change', () => {
       if (imageInput.files && imageInput.files[0]) {
-        fileLabelText.textContent = imageInput.files[0].name;
+        selectFile(imageInput.files[0]);
       } else {
-        fileLabelText.textContent = 'Välj en bild…';
+        clearSelectedFile();
       }
+    });
+  }
+
+  if (uploadDropzone) {
+    ['dragenter', 'dragover'].forEach((eventName) => {
+      uploadDropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        uploadDropzone.classList.add('is-dragging');
+      });
+    });
+    ['dragleave', 'drop'].forEach((eventName) => {
+      uploadDropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        uploadDropzone.classList.remove('is-dragging');
+      });
+    });
+    uploadDropzone.addEventListener('drop', (event) => {
+      const file = event.dataTransfer && event.dataTransfer.files[0];
+      if (file) selectFile(file);
     });
   }
 
   if (uploadForm) {
     uploadForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!imageInput || !imageInput.files || !imageInput.files[0]) {
+      if (!selectedFile) {
         setStatus('Välj en bild först.', 'error');
         return;
       }
       const formData = new FormData();
-      formData.append('image', imageInput.files[0]);
+      formData.append('image', selectedFile);
       setStatus('Laddar upp…');
+      if (uploadButton) uploadButton.setAttribute('disabled', 'true');
       try {
         const newItem = await api.post('/items', formData);
         setStatus('Uppladdning klar!', 'success');
-        uploadForm.reset();
-        if (fileLabelText) fileLabelText.textContent = 'Välj en bild…';
+        clearSelectedFile();
         items.unshift(newItem);
         currentIndex = 0;
         showItem(newItem);
       } catch (err) {
         setStatus(String(err), 'error');
+      } finally {
+        if (uploadButton) uploadButton.removeAttribute('disabled');
       }
     });
   }

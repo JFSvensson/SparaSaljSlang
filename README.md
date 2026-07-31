@@ -70,6 +70,15 @@ Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSW
 
 Compose exponerar appen endast på VPS:ens `127.0.0.1`. Placera en HTTPS-reverse-proxy, till exempel Caddy eller Nginx, framför den. Reverse-proxyn ska terminera TLS och vidarebefordra `X-Forwarded-Proto`; appen kräver HTTPS för sessionskakan när `NODE_ENV=production`.
 
+Exempel för Caddy på VPS:en, där `example.com` ersätts med den riktiga domänen:
+```caddyfile
+example.com {
+   reverse_proxy 127.0.0.1:3000
+}
+```
+
+Caddy skaffar och förnyar TLS-certifikat automatiskt när domänens DNS pekar på VPS:en och portarna 80 och 443 är öppna. Caddy sätter även nödvändiga vidarebefordrade headers för Express automatiskt.
+
 ### Backup
 SQLite-databasen och uppladdade bilder ligger i Compose-volymerna `app-data` respektive `app-uploads`. Stoppa appen före en konsekvent manuell backup:
 ```bash
