@@ -6,6 +6,7 @@
 
   const api = window.__appApi;
   const ui = window.__ui;
+  const components = window.__components;
   const itemsGrid = document.getElementById('items-grid');
   const listStatus = document.getElementById('list-status');
 
@@ -24,6 +25,7 @@
   const modalCountThrow = document.getElementById('modal-count-throw');
 
   let currentItemId = -1;
+  let modalController = null;
 
   // ── Helpers ──────────────────────────────────────────────────────
 
@@ -65,21 +67,17 @@
     }
     if (modalName) modalName.textContent = item.original_name;
     updateModalBars(item.save_count, item.sell_count, item.throw_count);
-    if (modal) modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+    modalController?.open();
   }
 
   function closeModal() {
-    if (modal) modal.classList.add('hidden');
-    document.body.style.overflow = '';
+    modalController?.close();
     currentItemId = -1;
   }
 
-  if (modalClose) modalClose.addEventListener('click', closeModal);
-  if (modalBackdrop) modalBackdrop.addEventListener('click', closeModal);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeModal();
-  });
+  if (modal) {
+    modalController = components.createModal(modal, modalClose, modalBackdrop);
+  }
 
   // ── Delete ────────────────────────────────────────────────────────
 
