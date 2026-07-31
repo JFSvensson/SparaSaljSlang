@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { ItemService } from '../services/itemService';
 import { config } from '../config';
+import { isAllowedChoice, isAllowedImageMimeType, parsePositiveInt } from '../validation';
 
 const router = Router();
 const itemService = new ItemService();
@@ -28,8 +29,7 @@ const fileFilter = (
   file: Express.Multer.File,
   cb: FileFilterCallback
 ) => {
-  const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  if (allowed.includes(file.mimetype)) {
+  if (isAllowedImageMimeType(file.mimetype)) {
     cb(null, true);
   } else {
     cb(new Error('Only image files are allowed (jpeg, png, gif, webp)'));
@@ -50,8 +50,9 @@ router.get('/', (_req: Request, res: Response) => {
 
 // GET /api/items/:id — get a single item
 router.get('/:id', (req: Request, res: Response) => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) {
+  const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parsePositiveInt(idParam);
+  if (id === null) {
     res.status(400).json({ error: 'Invalid id' });
     return;
   }
@@ -89,8 +90,9 @@ router.post(
 
 // DELETE /api/items/:id — delete an item
 router.delete('/:id', (req: Request, res: Response) => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) {
+  const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parsePositiveInt(idParam);
+  if (id === null) {
     res.status(400).json({ error: 'Invalid id' });
     return;
   }
@@ -106,8 +108,9 @@ router.delete('/:id', (req: Request, res: Response) => {
 
 // GET /api/items/:id/choices — get choices for an item
 router.get('/:id/choices', (req: Request, res: Response) => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) {
+  const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parsePositiveInt(idParam);
+  if (id === null) {
     res.status(400).json({ error: 'Invalid id' });
     return;
   }
@@ -121,13 +124,14 @@ router.get('/:id/choices', (req: Request, res: Response) => {
 
 // POST /api/items/:id/choices — submit a choice for an item
 router.post('/:id/choices', (req: Request, res: Response) => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) {
+  const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parsePositiveInt(idParam);
+  if (id === null) {
     res.status(400).json({ error: 'Invalid id' });
     return;
   }
   const { choice } = req.body as { choice: string };
-  if (!choice || !['save', 'sell', 'throw'].includes(choice)) {
+  if (!isAllowedChoice(choice)) {
     res.status(400).json({ error: 'Choice must be one of: save, sell, throw' });
     return;
   }
