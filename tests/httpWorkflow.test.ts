@@ -92,10 +92,60 @@ test('HTTP workflow enforces CSRF, authenticates, validates choices, and revokes
   assert.equal(revokedSessionResponse.status, 401);
 });
 
+test('HTTP workflow uploads a valid image, normalizes its display name, and removes it', async () => {
+  const authenticatedCookie = await login();
+  const uploadToken = await getCsrfToken(authenticatedCookie);
+  const formData = new FormData();
+  formData.append(
+    'image',
+    new Blob(['image-content'], { type: 'image/png' }),
+    '../unsafe:name?.png'
+  );
+
+  const uploadResponse = await fetch(`${baseUrl}/api/items`, {
+    method: 'POST',
+    headers: { Cookie: authenticatedCookie, 'x-csrf-token': uploadToken },
+    body: formData,
+  });
+  assert.equal(uploadResponse.status, 201);
+  const item = await uploadResponse.json() as { id: number; filename: string; original_name: string };
+  assert.equal(item.original_name, 'unsafe_name_.png');
+  await fs.access(path.join(appRoot, 'uploads', item.filename));
+
+  const deleteToken = await getCsrfToken(authenticatedCookie);
+  const deleteResponse = await fetch(`${baseUrl}/api/items/${item.id}`, {
+    method: 'DELETE',
+    headers: { Cookie: authenticatedCookie, 'x-csrf-token': deleteToken },
+  });
+  assert.equal(deleteResponse.status, 200);
+  await assert.rejects(() => fs.access(path.join(appRoot, 'uploads', item.filename)));
+
+  const missingItemResponse = await fetch(`${baseUrl}/api/items/${item.id}`, {
+    headers: { Cookie: authenticatedCookie },
+  });
+  assert.equal(missingItemResponse.status, 404);
+});
+
 async function createSession(): Promise<{ cookie: string }> {
   const response = await fetch(`${baseUrl}/api/csrf-token`);
   assert.equal(response.status, 200);
   return { cookie: readSessionCookie(response) };
+}
+
+async function login(): Promise<string> {
+  const initialSession = await createSession();
+  const token = await getCsrfToken(initialSession.cookie);
+  const response = await fetch(`${baseUrl}/api/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: initialSession.cookie,
+      'x-csrf-token': token,
+    },
+    body: JSON.stringify({ username: 'workflow-admin', password: 'workflow-password' }),
+  });
+  assert.equal(response.status, 200);
+  return readSessionCookie(response);
 }
 
 async function getCsrfToken(cookie: string): Promise<string> {
