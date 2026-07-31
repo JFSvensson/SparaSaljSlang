@@ -14,6 +14,7 @@
   const itemName = document.getElementById('item-name');
   const voteResult = document.getElementById('vote-result');
   const nextBtn = document.getElementById('next-btn');
+  const deleteCurrentBtn = document.getElementById('delete-current-btn');
   const choiceButtons = document.querySelectorAll('.choice-buttons .btn');
 
   /** @type {{ id: number; filename: string; original_name: string }[]} */
@@ -150,6 +151,39 @@
       }
     });
   });
+
+  // ── Delete current item ──────────────────────────────────────────
+
+  if (deleteCurrentBtn) {
+    deleteCurrentBtn.addEventListener('click', async () => {
+      if (currentItemId === -1) return;
+      if (!confirm('Vill du verkligen ta bort detta föremål?')) return;
+
+      deleteCurrentBtn.setAttribute('disabled', 'true');
+      try {
+        const res = await fetch('/api/items/' + currentItemId, { method: 'DELETE' });
+        if (!res.ok) {
+          const body = await res.json();
+          throw new Error(body.error || 'Borttagning misslyckades');
+        }
+
+        items = items.filter((item) => item.id !== currentItemId);
+        if (items.length === 0) {
+          currentItemId = -1;
+          showEmpty();
+          return;
+        }
+
+        currentIndex = Math.min(currentIndex, items.length - 1);
+        showItem(items[currentIndex]);
+        setStatus('Föremålet togs bort.', 'success');
+      } catch (err) {
+        setStatus(String(err), 'error');
+      } finally {
+        deleteCurrentBtn.removeAttribute('disabled');
+      }
+    });
+  }
 
   // ── Next item ─────────────────────────────────────────────────────
 
