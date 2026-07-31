@@ -9,6 +9,8 @@
   const components = window.__components;
   const itemsGrid = document.getElementById('items-grid');
   const listStatus = document.getElementById('list-status');
+  const sortSelect = /** @type {HTMLSelectElement} */ (document.getElementById('sort-select'));
+  const sortDirectionButton = document.getElementById('sort-direction');
 
   const modal = document.getElementById('modal');
   const modalClose = document.getElementById('modal-close');
@@ -26,11 +28,40 @@
 
   let currentItemId = -1;
   let modalController = null;
+  let items = [];
+  let sortField = 'save_count';
+  let sortDirection = 'descending';
 
   // ── Helpers ──────────────────────────────────────────────────────
 
   function setStatus(msg, type) {
     ui.setStatus(listStatus, msg, type);
+  }
+
+  function updateSortDirectionButton() {
+    if (!sortDirectionButton) return;
+    const isDescending = sortDirection === 'descending';
+    sortDirectionButton.textContent = isDescending ? '↓' : '↑';
+    sortDirectionButton.setAttribute(
+      'aria-label',
+      isDescending ? 'Sortera fallande' : 'Sortera stigande'
+    );
+    sortDirectionButton.setAttribute(
+      'title',
+      isDescending ? 'Sortera fallande' : 'Sortera stigande'
+    );
+  }
+
+  function getSortedItems() {
+    const multiplier = sortDirection === 'descending' ? -1 : 1;
+    return [...items].sort((first, second) => {
+      const difference = (first[sortField] - second[sortField]) * multiplier;
+      return difference || second.id - first.id;
+    });
+  }
+
+  function renderSortedItems() {
+    buildGrid(getSortedItems());
   }
 
   function verdict(save, sell, throwCount) {
@@ -149,13 +180,29 @@
   async function loadItems() {
     setStatus('Hämtar föremål…');
     try {
-      const items = await api.get('/items');
-      buildGrid(items);
+      items = await api.get('/items');
+      renderSortedItems();
     } catch (err) {
       setStatus(String(err), 'error');
     }
   }
 
+  if (sortSelect) {
+    sortSelect.addEventListener('change', () => {
+      sortField = sortSelect.value;
+      renderSortedItems();
+    });
+  }
+
+  if (sortDirectionButton) {
+    sortDirectionButton.addEventListener('click', () => {
+      sortDirection = sortDirection === 'descending' ? 'ascending' : 'descending';
+      updateSortDirectionButton();
+      renderSortedItems();
+    });
+  }
+
   // ── Init ──────────────────────────────────────────────────────────
+  updateSortDirectionButton();
   loadItems();
 })();

@@ -23,6 +23,21 @@
   <main>
     <section class="card">
       <h2>Alla uppladdade föremål</h2>
+      <div class="list-toolbar">
+        <label for="sort-select">Sortera efter</label>
+        <select id="sort-select">
+          <option value="save_count">Spara</option>
+          <option value="sell_count">Sälj</option>
+          <option value="throw_count">Släng</option>
+        </select>
+        <button
+          id="sort-direction"
+          class="icon-button"
+          type="button"
+          aria-label="Sortera fallande"
+          title="Sortera fallande"
+        >↓</button>
+      </div>
       <p id="list-status" class="status-msg"></p>
       <div id="items-grid" class="items-grid"></div>
     </section>
