@@ -120,6 +120,18 @@ Appen hanterar `SIGTERM` och `SIGINT` genom att sluta ta emot nya HTTP-anslutnin
 
 API-förfrågningar och serverhändelser loggas som JSON till standardutdata. Förfrågningsloggar innehåller endast metod, sökväg, status och svarstid; lösenord, cookies, frågesträngar och bilduppgifter loggas inte.
 
+### Loggövervakning
+Compose använder Docker-drivrutinen `local` och behåller högst tre loggfiler på 10 MB vardera. Följ senaste loggarna på VPS:en med:
+```bash
+docker compose logs --tail 100 -f app
+```
+
+Undersök händelser med `"level":"error"` eller `"event":"request_failed"` och kontrollera samtidigt containerstatus och hälsa:
+```bash
+docker compose ps
+curl http://127.0.0.1:3000/api/health
+```
+
 ## Användning
 - Öppna appen i webbläsaren på http://localhost:3000
 - Logga in med användarnamn och lösenord som ställts in via miljövariabler

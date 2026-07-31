@@ -11,10 +11,11 @@
 - Guardat återställningsskript och dokumenterad återställningsövning för Docker-volymerna.
 - Docker Compose-smoketest: Linux-imagen byggs med native SQLite-stöd, containern blir frisk och `/api/health` bekräftar SQLite.
 - Verifierad backup- och återställningsövning: ett tillfälligt testobjekt i upload-volymen togs bort efter återställning och appen blev frisk igen.
+- Begränsad Docker-loggning med tre roterade 10 MB-filer och dokumenterad loggövervakning.
 
 ## Nästa steg
 1. Distribuera på VPS och verifiera Caddy/TLS med den riktiga domänen och produktionshemligheter.
-2. Fastställ rutin för loggövervakning och regelbunden offsite-kopiering av backup-arkiv.
+2. Automatisera regelbunden offsite-kopiering av backup-arkiv.
 
 ## Principer
 - Behåll Express, SQLite och statisk vanilla-frontend tills produktens komplexitet motiverar en större förändring.
