@@ -5,7 +5,12 @@ import fs from 'fs';
 import path from 'path';
 import { ItemService } from '../services/itemService';
 import { config } from '../config';
-import { isAllowedChoice, isAllowedImageMimeType, parsePositiveInt } from '../validation';
+import {
+  isAllowedChoice,
+  isAllowedImageMimeType,
+  normalizeOriginalName,
+  parsePositiveInt,
+} from '../validation';
 import { HttpError } from '../errors';
 
 const router = Router();
@@ -89,7 +94,10 @@ router.post(
     if (!req.file) {
       throw new HttpError(400, 'No image file provided');
     }
-    const item = itemService.createItem(req.file.filename, req.file.originalname);
+    const item = itemService.createItem(
+      req.file.filename,
+      normalizeOriginalName(req.file.originalname)
+    );
     res.status(201).json(item);
   }
 );
