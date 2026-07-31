@@ -93,6 +93,21 @@ Skriptet stoppar appen, skapar en tidsstämplad katalog under `backups/`, arkive
 
 Förvara backupkatalogen på en annan maskin eller lagringstjänst efter att arkiven har skapats. Testa återställning på en separat Docker-värd innan den behövs i produktion.
 
+### Återställningsövning
+Kör återställningen först på en separat Docker-värd med samma projektfiler och en giltig `.env`. Skapa tomma volymer genom att starta appen en gång, kopiera backupkatalogen till värden och kör sedan:
+```bash
+chmod +x scripts/restore.sh
+CONFIRM_RESTORE=sparasaljslang ./scripts/restore.sh /sökväg/till/backupkatalog
+```
+
+Skriptet kontrollerar att båda arkiven finns, stoppar appen, ersätter innehållet i de beständiga volymerna och startar appen igen. Bekräftelsevariabeln krävs eftersom återställningen ersätter befintlig databas och uppladdade bilder. Verifiera sedan med:
+```bash
+docker compose ps
+curl http://127.0.0.1:3000/api/health
+```
+
+Logga in och kontrollera minst ett återställt föremål och dess bild innan proceduren används mot produktion.
+
 ## Driftkontroll
 Använd `GET /api/health` för en enkel driftkontroll. Ett lyckat svar är:
 ```json

@@ -8,10 +8,11 @@
 - Enhetstester och isolerade HTTP-flödestester för inloggning, CSRF, uppladdning, röstning och borttagning, inklusive filstorlek och rate limiting.
 - Uppladdningsflöde med lokal bildförhandsvisning, klientvalidering av typ och storlek samt drag-and-drop.
 - Dokumenterad, avbrottssäker backup-rutin för Docker-volymerna.
+- Guardat återställningsskript och dokumenterad återställningsövning för Docker-volymerna.
 
 ## Nästa steg
 1. Verifiera Docker Compose på en Docker-värd och dokumentera reverse-proxy-konfiguration för HTTPS.
-2. Genomför en återställningsövning på en separat Docker-värd och fastställ rutin för loggövervakning.
+2. Genomför återställningsövningen på en separat Docker-värd och fastställ rutin för loggövervakning.
 
 ## Principer
 - Behåll Express, SQLite och statisk vanilla-frontend tills produktens komplexitet motiverar en större förändring.
