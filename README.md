@@ -80,15 +80,18 @@ example.com {
 Caddy skaffar och förnyar TLS-certifikat automatiskt när domänens DNS pekar på VPS:en och portarna 80 och 443 är öppna. Caddy sätter även nödvändiga vidarebefordrade headers för Express automatiskt.
 
 ### Backup
-SQLite-databasen och uppladdade bilder ligger i Compose-volymerna `app-data` respektive `app-uploads`. Stoppa appen före en konsekvent manuell backup:
+SQLite-databasen och uppladdade bilder ligger i Compose-volymerna `sparasaljslang_app-data` respektive `sparasaljslang_app-uploads`. Kör backupskriptet från projektets rot på VPS:en:
 ```bash
-docker compose stop app
-docker run --rm -v sparasaljslang_app-data:/data -v "$PWD":/backup alpine tar czf /backup/app-data-backup.tar.gz -C /data .
-docker run --rm -v sparasaljslang_app-uploads:/uploads -v "$PWD":/backup alpine tar czf /backup/app-uploads-backup.tar.gz -C /uploads .
-docker compose start app
+chmod +x scripts/backup.sh
+./scripts/backup.sh
 ```
 
-Anpassa volymprefixet (`sparasaljslang`) om Compose-projektnamnet skiljer sig på servern.
+Skriptet stoppar appen, skapar en tidsstämplad katalog under `backups/`, arkiverar båda volymerna och startar sedan appen igen, även om backupen avbryts eller misslyckas. Du kan välja en egen målkatalog genom att skicka den som första argument:
+```bash
+./scripts/backup.sh /var/backups/sparasaljslang/2026-07-31
+```
+
+Förvara backupkatalogen på en annan maskin eller lagringstjänst efter att arkiven har skapats. Testa återställning på en separat Docker-värd innan den behövs i produktion.
 
 ## Driftkontroll
 Använd `GET /api/health` för en enkel driftkontroll. Ett lyckat svar är:
