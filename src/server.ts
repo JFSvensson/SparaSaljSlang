@@ -1,12 +1,14 @@
 import express from 'express';
 import path from 'path';
 import session from 'express-session';
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import itemsRouter from './routes/items';
 import { config, validateConfig } from './config';
 import { authenticateUser } from './auth';
 import { toPublicError } from './errors';
 import { SqliteSessionStore } from './sessionStore';
+import { csrfSynchronisedProtection, generateToken } from './csrf';
 
 validateConfig();
 const app = express();
@@ -15,6 +17,13 @@ const sessionCookieName = 'sparasaljslang.sid';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      upgradeInsecureRequests: config.isProduction ? [] : null,
+    },
+  },
+}));
 if (config.isProduction) {
   app.set('trust proxy', 1);
 }
@@ -54,6 +63,7 @@ app.use((req, res, next) => {
     pathname === '/login.html' ||
     pathname === '/api/login' ||
     pathname === '/api/logout' ||
+    pathname === '/api/csrf-token' ||
     pathname === '/api/health' ||
     pathname.startsWith('/uploads/');
 
@@ -79,6 +89,12 @@ app.use((req, res, next) => {
 app.get('/login', (_req, res) => {
   res.redirect('/login.html');
 });
+
+app.get('/api/csrf-token', (req, res) => {
+  res.json({ token: generateToken(req) });
+});
+
+app.use(csrfSynchronisedProtection);
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
@@ -125,14 +141,16 @@ app.get('/api/health', (_req, res) => {
 app.use('/uploads', express.static(config.uploadsDir));
 
 // Serve static frontend files
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(config.publicDir));
 
 // API routes
 app.use('/api/items', apiLimiter, itemsRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err);
   const publicError = toPublicError(err);
+  if (publicError.status >= 500) {
+    console.error(err);
+  }
   res.status(publicError.status).json(publicError.body);
 });
 

@@ -30,34 +30,6 @@
     </section>
   </main>
 
-  <script>
-    const form = document.getElementById('login-form');
-    const status = document.getElementById('login-status');
-
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-
-      status.textContent = 'Loggar in…';
-      status.className = 'status-msg';
-
-      try {
-        const response = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error || 'Inloggning misslyckades');
-
-        window.location.href = '/index.html';
-      } catch (error) {
-        status.textContent = error.message;
-        status.className = 'status-msg error';
-      }
-    });
-  </script>
+  <script src="login.js"></script>
 </body>
 </html>

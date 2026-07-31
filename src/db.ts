@@ -1,12 +1,12 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-
-const DB_PATH = path.join(__dirname, '..', 'data', 'sparasaljslang.db');
-
 import fs from 'fs';
-const dataDir = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+import { config } from './config';
+
+const DB_PATH = path.join(config.dataDir, 'sparasaljslang.db');
+
+if (!fs.existsSync(config.dataDir)) {
+  fs.mkdirSync(config.dataDir, { recursive: true });
 }
 
 const db = new Database(DB_PATH);

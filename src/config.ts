@@ -1,10 +1,12 @@
 import path from 'path';
 
-const rootDir = path.resolve(__dirname, '..');
+const rootDir = path.resolve(process.env.APP_ROOT ?? process.cwd());
 const isProduction = process.env.NODE_ENV === 'production';
 
 export const config = {
   port: parseInt(process.env.PORT ?? '3000', 10),
+  publicDir: path.join(rootDir, 'public'),
+  dataDir: path.join(rootDir, 'data'),
   uploadsDir: path.join(rootDir, 'uploads'),
   loginUsername: process.env.LOGIN_USERNAME?.trim() || 'admin',
   loginPassword: process.env.LOGIN_PASSWORD?.trim() || 'change-me',

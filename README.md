@@ -7,12 +7,15 @@ Enkel webbapp för att bestämma om ett föremål ska sparas, säljas eller slä
 - Visa alla uppladdade föremål med sammanställda röster
 - Ta bort föremål och deras uppladdade bilder
 - Enkel inloggning med signerade, SQLite-lagrade sessioner
+- CSRF-skydd för inloggning, utloggning, uppladdning, röstning och borttagning
+- Säkerhetsheaders och content security policy via Helmet
 
 ## Teknisk stack
 - Node.js + Express
 - TypeScript
 - better-sqlite3 för lagring
 - Multer för filuppladdningar
+- express-session, csrf-sync och Helmet för sessions- och webbsäkerhet
 
 ## Installation
 1. Installera beroenden:
