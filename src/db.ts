@@ -31,6 +31,19 @@ db.exec(`
   );
 `);
 
+export interface HealthDatabase {
+  prepare(sql: string): { get(): unknown };
+}
+
+export function isDatabaseAvailable(database: HealthDatabase = db): boolean {
+  try {
+    database.prepare('SELECT 1').get();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface Item {
   id: number;
   filename: string;

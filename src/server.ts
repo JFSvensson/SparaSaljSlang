@@ -9,6 +9,7 @@ import { authenticateUser } from './auth';
 import { toPublicError } from './errors';
 import { SqliteSessionStore } from './sessionStore';
 import { csrfSynchronisedProtection, generateToken } from './csrf';
+import { isDatabaseAvailable } from './db';
 
 validateConfig();
 const app = express();
@@ -134,7 +135,11 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
+  if (!isDatabaseAvailable()) {
+    return res.status(503).json({ status: 'unavailable', database: 'unavailable' });
+  }
+
+  return res.json({ status: 'ok', database: 'ok' });
 });
 
 // Serve uploaded images

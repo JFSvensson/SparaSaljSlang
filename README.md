@@ -50,6 +50,14 @@ npm run hash-password -- "ditt-losenord"
 
 Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSWORD_HASH` och `SESSION_SECRET`. Appen vägrar att starta i produktion om någon av dem saknas. `LOGIN_PASSWORD` används endast som lokal utvecklingsfallback och ska inte sättas i produktion.
 
+## Driftkontroll
+Använd `GET /api/health` för en enkel driftkontroll. Ett lyckat svar är:
+```json
+{ "status": "ok", "database": "ok" }
+```
+
+Endpointen returnerar `503` om SQLite inte kan svara på en kontrollfråga.
+
 ## Användning
 - Öppna appen i webbläsaren på http://localhost:3000
 - Logga in med användarnamn och lösenord som ställts in via miljövariabler
