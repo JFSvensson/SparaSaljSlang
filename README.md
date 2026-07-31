@@ -108,6 +108,7 @@ API-förfrågningar och serverhändelser loggas som JSON till standardutdata. F�
   ```bash
   npm test
   ```
+- GitHub Actions-workflowen `CI` kör `npm ci`, bygg och tester automatiskt vid push till `main` och för varje pull request.
 
 ## Struktur
 - src/server.ts – server- och autentiseringssetup
