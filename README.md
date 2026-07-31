@@ -79,6 +79,64 @@ example.com {
 
 Caddy skaffar och förnyar TLS-certifikat automatiskt när domänens DNS pekar på VPS:en och portarna 80 och 443 är öppna. Caddy sätter även nödvändiga vidarebefordrade headers för Express automatiskt.
 
+### Exempel: första deploy på Ubuntu/Debian
+Exemplet nedan använder domänen `app.example.com`. Byt den mot den riktiga domänen och skapa en DNS-post av typen `A` som pekar på VPS:ens publika IPv4-adress innan Caddy startas.
+
+Installera Docker, Compose, Git och Caddy på VPS:en:
+```bash
+sudo apt update
+sudo apt install -y docker.io docker-compose-v2 git caddy
+sudo usermod -aG docker "$USER"
+```
+
+Logga in igen så att den nya Docker-gruppen används, klona sedan appen och skapa den privata miljöfilen:
+```bash
+sudo install -d -m 0750 -o "$USER" -g "$USER" /opt/sparasaljslang
+git clone https://github.com/JFSvensson/SparaSaljSlang.git /opt/sparasaljslang
+cd /opt/sparasaljslang
+cp .env.example .env
+chmod 600 .env
+nano .env
+```
+
+`.env` ska innehålla riktiga värden för `LOGIN_USERNAME`, `LOGIN_PASSWORD_HASH` och `SESSION_SECRET`; lämna inte platshållarvärden från `.env.example`. Bygg och starta därefter appen:
+```bash
+docker compose up --build -d
+docker compose ps
+curl http://127.0.0.1:3000/api/health
+```
+
+Konfigurera Caddy med den riktiga domänen:
+```bash
+sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
+app.example.com {
+   reverse_proxy 127.0.0.1:3000
+}
+EOF
+sudo systemctl reload caddy
+```
+
+Öppna enbart SSH, HTTP och HTTPS i VPS:ens brandvägg. Port `3000` ska inte öppnas externt eftersom Compose binder den till `127.0.0.1`.
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+Verifiera efter DNS-propagering att TLS och sessionskakor fungerar via den publika domänen:
+```bash
+curl --fail --show-error https://app.example.com/api/health
+```
+
+Vid senare uppdateringar:
+```bash
+cd /opt/sparasaljslang
+git pull --ff-only
+docker compose up --build -d
+docker image prune -f
+```
+
 ### Backup
 SQLite-databasen och uppladdade bilder ligger i Compose-volymerna `sparasaljslang_app-data` respektive `sparasaljslang_app-uploads`. Kör backupskriptet från projektets rot på VPS:en:
 ```bash
@@ -92,6 +150,21 @@ Skriptet stoppar appen, skapar en tidsstämplad katalog under `backups/`, arkive
 ```
 
 Förvara backupkatalogen på en annan maskin eller lagringstjänst efter att arkiven har skapats. Testa återställning på en separat Docker-värd innan den behövs i produktion.
+
+### Exempel: daglig offsite-backup med rclone
+`rclone` kan kopiera backupkatalogen till exempelvis Backblaze B2, S3, OneDrive eller en annan SFTP-server. Installera och konfigurera först en egen fjärrlagring; detta behöver göras interaktivt på VPS:en:
+```bash
+sudo apt install -y rclone
+rclone config
+rclone lsd remote:
+```
+
+Följande `cron`-rad skapar en backup varje natt kl. 03:15 och kopierar den till en rclone-remote som heter `remote`. Ersätt `remote:sparasaljslang` med den konfigurerade lagringsplatsen:
+```cron
+15 3 * * * cd /opt/sparasaljslang && ./scripts/backup.sh /var/backups/sparasaljslang/$(date +\%F) && rclone copy /var/backups/sparasaljslang/$(date +\%F) remote:sparasaljslang/$(date +\%F) --checksum >> /var/log/sparasaljslang-backup.log 2>&1
+```
+
+Lägg in raden med `crontab -e` för den användare som kör Docker. Använd `rclone copy`, inte `rclone sync`, så att ett felaktigt lokalt kommando inte kan radera äldre offsite-backuper. Kontrollera regelbundet `/var/log/sparasaljslang-backup.log` och återställ minst en backup till en separat Docker-värd.
 
 ### Återställningsövning
 Kör återställningen först på en separat Docker-värd med samma projektfiler och en giltig `.env`. Skapa tomma volymer genom att starta appen en gång, kopiera backupkatalogen till värden och kör sedan:
