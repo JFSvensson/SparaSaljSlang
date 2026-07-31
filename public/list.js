@@ -4,6 +4,7 @@
 (function () {
   'use strict';
 
+  const api = window.__appApi;
   const itemsGrid = document.getElementById('items-grid');
   const listStatus = document.getElementById('list-status');
 
@@ -88,11 +89,7 @@
       if (currentItemId === -1) return;
       if (!confirm('Vill du verkligen ta bort detta föremål?')) return;
       try {
-        const res = await fetch('/api/items/' + currentItemId, { method: 'DELETE' });
-        if (!res.ok) {
-          const body = await res.json();
-          throw new Error(body.error || 'Borttagning misslyckades');
-        }
+        await api.delete('/items/' + currentItemId);
         closeModal();
         loadItems();
       } catch (err) {
@@ -155,9 +152,7 @@
   async function loadItems() {
     setStatus('Hämtar föremål…');
     try {
-      const res = await fetch('/api/items');
-      if (!res.ok) throw new Error('Kunde inte hämta föremål');
-      const items = await res.json();
+      const items = await api.get('/items');
       buildGrid(items);
     } catch (err) {
       setStatus(String(err), 'error');
