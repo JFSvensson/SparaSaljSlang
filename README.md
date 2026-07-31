@@ -50,6 +50,37 @@ npm run hash-password -- "ditt-losenord"
 
 Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSWORD_HASH` och `SESSION_SECRET`. Appen vägrar att starta i produktion om någon av dem saknas. `LOGIN_PASSWORD` används endast som lokal utvecklingsfallback och ska inte sättas i produktion.
 
+## VPS med Docker
+1. Installera Docker Engine med Docker Compose på VPS:en.
+2. Skapa den faktiska konfigurationsfilen från mallen:
+   ```bash
+   cp .env.example .env
+   ```
+3. Ersätt alla platshållarvärden i `.env`. Skapa `LOGIN_PASSWORD_HASH` med `npm run hash-password -- "ditt-losenord"` och skapa `SESSION_SECRET` med kommandot ovan.
+4. Bygg och starta appen:
+   ```bash
+   docker compose up --build -d
+   ```
+5. Kontrollera status och loggar:
+   ```bash
+   docker compose ps
+   docker compose logs -f app
+   curl http://127.0.0.1:3000/api/health
+   ```
+
+Compose exponerar appen endast på VPS:ens `127.0.0.1`. Placera en HTTPS-reverse-proxy, till exempel Caddy eller Nginx, framför den. Reverse-proxyn ska terminera TLS och vidarebefordra `X-Forwarded-Proto`; appen kräver HTTPS för sessionskakan när `NODE_ENV=production`.
+
+### Backup
+SQLite-databasen och uppladdade bilder ligger i Compose-volymerna `app-data` respektive `app-uploads`. Stoppa appen före en konsekvent manuell backup:
+```bash
+docker compose stop app
+docker run --rm -v sparasaljslang_app-data:/data -v "$PWD":/backup alpine tar czf /backup/app-data-backup.tar.gz -C /data .
+docker run --rm -v sparasaljslang_app-uploads:/uploads -v "$PWD":/backup alpine tar czf /backup/app-uploads-backup.tar.gz -C /uploads .
+docker compose start app
+```
+
+Anpassa volymprefixet (`sparasaljslang`) om Compose-projektnamnet skiljer sig på servern.
+
 ## Driftkontroll
 Använd `GET /api/health` för en enkel driftkontroll. Ett lyckat svar är:
 ```json
