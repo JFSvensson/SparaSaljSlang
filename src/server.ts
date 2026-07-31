@@ -2,11 +2,11 @@ import express from 'express';
 import path from 'path';
 import rateLimit from 'express-rate-limit';
 import itemsRouter from './routes/items';
+import { config } from './config';
+import { authenticateUser } from './auth';
 
 const app = express();
-const PORT = parseInt(process.env.PORT ?? '3000', 10);
-const loginUsername = process.env.LOGIN_USERNAME?.trim() || 'admin';
-const loginPassword = process.env.LOGIN_PASSWORD?.trim() || 'change-me';
+const PORT = config.port;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -72,7 +72,7 @@ app.get('/login', (_req, res) => {
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
 
-  if (username === loginUsername && password === loginPassword) {
+  if (authenticateUser(username, password)) {
     res.cookie('auth_session', 'true', {
       httpOnly: true,
       sameSite: 'lax',
@@ -91,7 +91,7 @@ app.post('/api/logout', (_req, res) => {
 });
 
 // Serve uploaded images
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/uploads', express.static(config.uploadsDir));
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -101,6 +101,11 @@ app.use('/api/items', apiLimiter, itemsRouter);
 
 // Stricter rate limit on upload endpoint
 app.use('/api/items', uploadLimiter);
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 app.listen(PORT, () => {
   console.log(`SparaSäljSlang running at http://localhost:${PORT}`);
