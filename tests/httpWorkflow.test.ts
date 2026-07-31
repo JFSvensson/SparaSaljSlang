@@ -67,6 +67,20 @@ test('HTTP workflow enforces CSRF, authenticates, validates choices, and revokes
   assert.equal(itemsResponse.status, 200);
   assert.deepEqual(await itemsResponse.json(), []);
 
+  const summaryResponse = await fetch(`${baseUrl}/api/items/summary`, {
+    headers: { Cookie: authenticatedCookie },
+  });
+  assert.equal(summaryResponse.status, 200);
+  assert.deepEqual(await summaryResponse.json(), {
+    total_items: 0,
+    total_votes: 0,
+    save_items: 0,
+    sell_items: 0,
+    throw_items: 0,
+    tied_items: 0,
+    undecided_items: 0,
+  });
+
   const csrfToken = await getCsrfToken(authenticatedCookie);
   const invalidChoiceResponse = await fetch(`${baseUrl}/api/items/1/choices`, {
     method: 'POST',

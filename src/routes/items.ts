@@ -57,6 +57,11 @@ const uploadLimiter = rateLimit({
   message: { error: 'Upload limit reached, please try again later.' },
 });
 
+// GET /api/items/summary — overview of current decision leaders
+router.get('/summary', (_req: Request, res: Response) => {
+  res.json(itemService.getDecisionSummary());
+});
+
 // GET /api/items — list all items with choice counts
 router.get('/', (_req: Request, res: Response) => {
   const items = itemService.listItems();

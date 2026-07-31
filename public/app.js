@@ -24,6 +24,12 @@
   const deleteCurrentBtn = document.getElementById('delete-current-btn');
   const logoutBtn = document.getElementById('logout-btn');
   const choiceButtons = document.querySelectorAll('.choice-buttons .btn');
+  const summaryItems = document.getElementById('summary-items');
+  const summaryVotes = document.getElementById('summary-votes');
+  const summarySave = document.getElementById('summary-save');
+  const summarySell = document.getElementById('summary-sell');
+  const summaryThrow = document.getElementById('summary-throw');
+  const summaryDetail = document.getElementById('summary-detail');
 
   /** @type {{ id: number; filename: string; original_name: string }[]} */
   let items = [];
@@ -72,6 +78,28 @@
   function showEmpty() {
     if (viewerSection) viewerSection.classList.add('hidden');
     if (emptySection) emptySection.classList.remove('hidden');
+  }
+
+  function renderSummary(summary) {
+    if (summaryItems) summaryItems.textContent = String(summary.total_items);
+    if (summaryVotes) summaryVotes.textContent = String(summary.total_votes);
+    if (summarySave) summarySave.textContent = String(summary.save_items);
+    if (summarySell) summarySell.textContent = String(summary.sell_items);
+    if (summaryThrow) summaryThrow.textContent = String(summary.throw_items);
+    if (summaryDetail) {
+      const parts = [];
+      if (summary.tied_items) parts.push(`${summary.tied_items} oavgjorda`);
+      if (summary.undecided_items) parts.push(`${summary.undecided_items} utan röster`);
+      summaryDetail.textContent = parts.join(' · ');
+    }
+  }
+
+  async function loadSummary() {
+    try {
+      renderSummary(await api.get('/items/summary'));
+    } catch (err) {
+      console.warn('Could not load decision summary', err);
+    }
   }
 
   function clearSelectedFile() {
@@ -169,6 +197,7 @@
         items.unshift(newItem);
         currentIndex = 0;
         showItem(newItem);
+        loadSummary();
       } catch (err) {
         setStatus(String(err), 'error');
       } finally {
@@ -189,6 +218,7 @@
         const data = await api.post('/items/' + currentItemId + '/choices', { choice });
         updateBars(data.counts.save, data.counts.sell, data.counts.throw);
         if (voteResult) voteResult.classList.remove('hidden');
+        loadSummary();
       } catch (err) {
         setStatus(String(err), 'error');
         choiceButtons.forEach((b) => b.removeAttribute('disabled'));
@@ -217,6 +247,7 @@
         currentIndex = Math.min(currentIndex, items.length - 1);
         showItem(items[currentIndex]);
         setStatus('Föremålet togs bort.', 'success');
+        loadSummary();
       } catch (err) {
         setStatus(String(err), 'error');
       } finally {
@@ -248,5 +279,6 @@
   }
 
   // ── Init ──────────────────────────────────────────────────────────
+  loadSummary();
   loadItems();
 })();

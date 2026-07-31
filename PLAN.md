@@ -12,10 +12,14 @@
 - Docker Compose-smoketest: Linux-imagen byggs med native SQLite-stöd, containern blir frisk och `/api/health` bekräftar SQLite.
 - Verifierad backup- och återställningsövning: ett tillfälligt testobjekt i upload-volymen togs bort efter återställning och appen blev frisk igen.
 - Begränsad Docker-loggning med tre roterade 10 MB-filer och dokumenterad loggövervakning.
+- Beslutsöversikt med antal föremål och röster samt aktuella ensamma ledare för Spara, Sälj och Släng.
 
 ## Nästa steg
-1. Distribuera på VPS och verifiera Caddy/TLS med den riktiga domänen och produktionshemligheter.
-2. Automatisera regelbunden offsite-kopiering av backup-arkiv.
+1. Lägg till namn- och datumfilter som samverkar med listans sortering.
+2. Lägg till massradering med tydlig bekräftelse, säkra filborttagningar och testat API-stöd.
+3. Lägg till CSV-export av föremål, röstetal och aktuellt beslut.
+4. Distribuera på VPS och verifiera Caddy/TLS med den riktiga domänen och produktionshemligheter.
+5. Automatisera regelbunden offsite-kopiering av backup-arkiv.
 
 ## Principer
 - Behåll Express, SQLite och statisk vanilla-frontend tills produktens komplexitet motiverar en större förändring.

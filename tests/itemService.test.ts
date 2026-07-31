@@ -78,6 +78,28 @@ test('ItemService deletes the matching image file before deleting its record', (
   assert.throws(() => service.deleteItem(99), /Item not found/);
 });
 
+test('ItemService summarizes items, votes, and current leading decisions', () => {
+  const itemRepository = createItemRepository();
+  itemRepository.getAll = () => [
+    { ...item, id: 1, save_count: 3, sell_count: 1, throw_count: 0 },
+    { ...item, id: 2, save_count: 1, sell_count: 4, throw_count: 1 },
+    { ...item, id: 3, save_count: 1, sell_count: 1, throw_count: 1 },
+    { ...item, id: 4, save_count: 0, sell_count: 0, throw_count: 0 },
+    { ...item, id: 5, save_count: 0, sell_count: 0, throw_count: 2 },
+  ];
+  const service = new ItemService('/uploads', itemRepository, createChoiceRepository(), noFiles());
+
+  assert.deepEqual(service.getDecisionSummary(), {
+    total_items: 5,
+    total_votes: 15,
+    save_items: 1,
+    sell_items: 1,
+    throw_items: 1,
+    tied_items: 1,
+    undecided_items: 1,
+  });
+});
+
 function noFiles(): FileSystem {
   return {
     existsSync: () => false,
