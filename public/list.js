@@ -5,6 +5,7 @@
   'use strict';
 
   const api = window.__appApi;
+  const ui = window.__ui;
   const itemsGrid = document.getElementById('items-grid');
   const listStatus = document.getElementById('list-status');
 
@@ -27,9 +28,7 @@
   // ── Helpers ──────────────────────────────────────────────────────
 
   function setStatus(msg, type) {
-    if (!listStatus) return;
-    listStatus.textContent = msg;
-    listStatus.className = 'status-msg' + (type ? ' ' + type : '');
+    ui.setStatus(listStatus, msg, type);
   }
 
   function verdict(save, sell, throwCount) {

@@ -5,6 +5,7 @@
   'use strict';
 
   const api = window.__appApi;
+  const ui = window.__ui;
   const uploadForm = /** @type {HTMLFormElement} */ (document.getElementById('upload-form'));
   const imageInput = /** @type {HTMLInputElement} */ (document.getElementById('image-input'));
   const fileLabelText = document.getElementById('file-label-text');
@@ -26,9 +27,7 @@
   // ── Helpers ──────────────────────────────────────────────────────
 
   function setStatus(msg, type) {
-    if (!uploadStatus) return;
-    uploadStatus.textContent = msg;
-    uploadStatus.className = 'status-msg' + (type ? ' ' + type : '');
+    ui.setStatus(uploadStatus, msg, type);
   }
 
   function updateBars(save, sell, throwCount) {
