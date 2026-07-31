@@ -11,11 +11,13 @@ import { SqliteSessionStore } from './sessionStore';
 import { csrfSynchronisedProtection, generateToken } from './csrf';
 import { closeDatabase, isDatabaseAvailable } from './db';
 import { closeResources } from './shutdown';
+import { createLogger } from './logger';
 
 validateConfig();
 const app = express();
 const PORT = config.port;
 const sessionCookieName = 'sparasaljslang.sid';
+const logger = createLogger();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -26,6 +28,22 @@ app.use(helmet({
     },
   },
 }));
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) {
+    return next();
+  }
+
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    logger.info('http_request', {
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      duration_ms: Date.now() - startedAt,
+    });
+  });
+  return next();
+});
 if (config.isProduction) {
   app.set('trust proxy', 1);
 }
@@ -155,13 +173,16 @@ app.use('/api/items', apiLimiter, itemsRouter);
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const publicError = toPublicError(err);
   if (publicError.status >= 500) {
-    console.error(err);
+    logger.error('request_failed', {
+      status: publicError.status,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    });
   }
   res.status(publicError.status).json(publicError.body);
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`SparaSäljSlang running at http://localhost:${PORT}`);
+  logger.info('server_started', { port: PORT });
 });
 
 let shutdownStarted = false;
@@ -172,10 +193,10 @@ function shutdown(signal: NodeJS.Signals): void {
   }
 
   shutdownStarted = true;
-  console.log(`Received ${signal}; shutting down gracefully.`);
+  logger.info('shutdown_started', { signal });
 
   const shutdownTimeout = setTimeout(() => {
-    console.error('Graceful shutdown timed out.');
+    logger.error('shutdown_timed_out');
     process.exit(1);
   }, 10_000);
   shutdownTimeout.unref();
@@ -183,7 +204,9 @@ function shutdown(signal: NodeJS.Signals): void {
   void closeResources(server, closeDatabase)
     .then(() => process.exit(0))
     .catch((error: unknown) => {
-      console.error('Graceful shutdown failed.', error);
+      logger.error('shutdown_failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       process.exit(1);
     });
 }

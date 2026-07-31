@@ -60,6 +60,8 @@ Endpointen returnerar `503` om SQLite inte kan svara på en kontrollfråga.
 
 Appen hanterar `SIGTERM` och `SIGINT` genom att sluta ta emot nya HTTP-anslutningar och stänga SQLite-databasen innan processen avslutas. Det gör omstarter via Docker, systemd eller en VPS mer förutsägbara.
 
+API-förfrågningar och serverhändelser loggas som JSON till standardutdata. Förfrågningsloggar innehåller endast metod, sökväg, status och svarstid; lösenord, cookies, frågesträngar och bilduppgifter loggas inte.
+
 ## Användning
 - Öppna appen i webbläsaren på http://localhost:3000
 - Logga in med användarnamn och lösenord som ställts in via miljövariabler
