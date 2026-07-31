@@ -8,6 +8,7 @@ export const config = {
   uploadsDir: path.join(rootDir, 'uploads'),
   loginUsername: process.env.LOGIN_USERNAME?.trim() || 'admin',
   loginPassword: process.env.LOGIN_PASSWORD?.trim() || 'change-me',
+  loginPasswordHash: process.env.LOGIN_PASSWORD_HASH?.trim(),
   isProduction,
   sessionSecret: process.env.SESSION_SECRET?.trim() || 'development-session-secret',
   sessionMaxAgeMs: 8 * 60 * 60 * 1000,
@@ -18,7 +19,7 @@ export function validateConfig(): void {
     return;
   }
 
-  const requiredVariables = ['LOGIN_USERNAME', 'LOGIN_PASSWORD', 'SESSION_SECRET'];
+  const requiredVariables = ['LOGIN_USERNAME', 'LOGIN_PASSWORD_HASH', 'SESSION_SECRET'];
   const missing = requiredVariables.filter((variable) => !process.env[variable]?.trim());
   if (missing.length > 0) {
     throw new Error(`Missing required production configuration: ${missing.join(', ')}`);

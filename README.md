@@ -40,7 +40,12 @@ I produktion måste även `SESSION_SECRET` vara satt. Skapa ett långt slumpvär
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSWORD` och `SESSION_SECRET`. Appen vägrar att starta i produktion om någon av dem saknas.
+För produktion, skapa först en lösenordshash:
+```bash
+npm run hash-password -- "ditt-losenord"
+```
+
+Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSWORD_HASH` och `SESSION_SECRET`. Appen vägrar att starta i produktion om någon av dem saknas. `LOGIN_PASSWORD` används endast som lokal utvecklingsfallback och ska inte sättas i produktion.
 
 ## Användning
 - Öppna appen i webbläsaren på http://localhost:3000

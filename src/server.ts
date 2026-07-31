@@ -80,10 +80,10 @@ app.get('/login', (_req, res) => {
   res.redirect('/login.html');
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
 
-  if (!authenticateUser(username, password)) {
+  if (!await authenticateUser(username, password)) {
     return res.status(401).json({ error: 'Fel användarnamn eller lösenord.' });
   }
 
