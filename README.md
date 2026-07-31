@@ -6,7 +6,7 @@ Enkel webbapp för att bestämma om ett föremål ska sparas, säljas eller slä
 - Ladda upp bilder av föremål
 - Visa alla uppladdade föremål med sammanställda röster
 - Ta bort föremål och deras uppladdade bilder
-- Enkel inloggning som kan ställas in via miljövariabler vid deployment
+- Enkel inloggning med signerade, SQLite-lagrade sessioner
 
 ## Teknisk stack
 - Node.js + Express
@@ -35,6 +35,13 @@ npm run build
 npm start
 ```
 
+I produktion måste även `SESSION_SECRET` vara satt. Skapa ett långt slumpvärde, till exempel med:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSWORD` och `SESSION_SECRET`. Appen vägrar att starta i produktion om någon av dem saknas.
+
 ## Användning
 - Öppna appen i webbläsaren på http://localhost:3000
 - Logga in med användarnamn och lösenord som ställts in via miljövariabler
@@ -57,5 +64,6 @@ npm start
 - src/services/itemService.ts – affärslogik för föremål
 - src/auth.ts – autentiseringshjälp
 - src/config.ts – gemensam konfiguration
+- src/sessionStore.ts – SQLite-lagring för inloggningssessioner
 - public/ – statiska sidor och frontend-skript
 

@@ -1,27 +1,40 @@
 import express from 'express';
 import path from 'path';
+import session from 'express-session';
 import rateLimit from 'express-rate-limit';
 import itemsRouter from './routes/items';
-import { config } from './config';
+import { config, validateConfig } from './config';
 import { authenticateUser } from './auth';
 import { toPublicError } from './errors';
+import { SqliteSessionStore } from './sessionStore';
 
+validateConfig();
 const app = express();
 const PORT = config.port;
+const sessionCookieName = 'sparasaljslang.sid';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+if (config.isProduction) {
+  app.set('trust proxy', 1);
+}
+app.use(session({
+  name: sessionCookieName,
+  store: new SqliteSessionStore(),
+  secret: config.sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.isProduction,
+    maxAge: config.sessionMaxAgeMs,
+  },
+}));
 
 function isAuthenticated(req: express.Request): boolean {
-  const cookieValue = req.headers.cookie
-    ?.split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith('auth_session='))
-    ?.split('=')
-    .slice(1)
-    .join('=');
-
-  return cookieValue === 'true';
+  return req.session.isAuthenticated === true;
 }
 
 // Rate limiting for API routes (protects file-system access)
@@ -52,6 +65,10 @@ app.use((req, res, next) => {
     return next();
   }
 
+  if (pathname.startsWith('/api/')) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
   if (req.accepts('html')) {
     return res.redirect('/login.html');
   }
@@ -66,22 +83,38 @@ app.get('/login', (_req, res) => {
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
 
-  if (authenticateUser(username, password)) {
-    res.cookie('auth_session', 'true', {
+  if (!authenticateUser(username, password)) {
+    return res.status(401).json({ error: 'Fel användarnamn eller lösenord.' });
+  }
+
+  req.session.regenerate((error) => {
+    if (error) {
+      return res.status(500).json({ error: 'Could not create session.' });
+    }
+
+    req.session.isAuthenticated = true;
+    return req.session.save((saveError) => {
+      if (saveError) {
+        return res.status(500).json({ error: 'Could not save session.' });
+      }
+      return res.json({ ok: true });
+    });
+  });
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy((error) => {
+    if (error) {
+      return res.status(500).json({ error: 'Could not end session.' });
+    }
+    res.clearCookie(sessionCookieName, {
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8 * 1000,
+      secure: config.isProduction,
       path: '/',
     });
     return res.json({ ok: true });
-  }
-
-  return res.status(401).json({ error: 'Fel användarnamn eller lösenord.' });
-});
-
-app.post('/api/logout', (_req, res) => {
-  res.clearCookie('auth_session', { path: '/' });
-  return res.json({ ok: true });
+  });
 });
 
 app.get('/api/health', (_req, res) => {
