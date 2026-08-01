@@ -9,8 +9,11 @@
   const components = window.__components;
   const itemsGrid = document.getElementById('items-grid');
   const listStatus = document.getElementById('list-status');
+  const nameFilter = /** @type {HTMLInputElement} */ (document.getElementById('filter-name'));
+  const dateFilter = /** @type {HTMLSelectElement} */ (document.getElementById('filter-date'));
   const sortSelect = /** @type {HTMLSelectElement} */ (document.getElementById('sort-select'));
   const sortDirectionButton = document.getElementById('sort-direction');
+  const bulkDeleteOpen = document.getElementById('bulk-delete-open');
 
   const modal = document.getElementById('modal');
   const modalClose = document.getElementById('modal-close');
@@ -26,16 +29,43 @@
   const modalCountSell = document.getElementById('modal-count-sell');
   const modalCountThrow = document.getElementById('modal-count-throw');
 
+  const bulkDeleteModal = document.getElementById('bulk-delete-modal');
+  const bulkDeleteClose = document.getElementById('bulk-delete-close');
+  const bulkDeleteBackdrop = bulkDeleteModal ? bulkDeleteModal.querySelector('.modal-backdrop') : null;
+  const bulkDeleteCancel = document.getElementById('bulk-delete-cancel');
+  const bulkDeleteConfirm = document.getElementById('bulk-delete-confirm');
+  const bulkDeleteMessage = document.getElementById('bulk-delete-message');
+  const bulkDeleteStatus = document.getElementById('bulk-delete-status');
+
   let currentItemId = -1;
   let modalController = null;
+  let bulkDeleteController = null;
   let items = [];
   let sortField = 'save_count';
   let sortDirection = 'descending';
+  let searchTerm = '';
+  let daysSinceUpload = 0;
+  const selectedItemIds = new Set();
 
   // ── Helpers ──────────────────────────────────────────────────────
 
   function setStatus(msg, type) {
     ui.setStatus(listStatus, msg, type);
+  }
+
+  function setBulkDeleteStatus(msg, type) {
+    ui.setStatus(bulkDeleteStatus, msg, type);
+  }
+
+  function updateBulkDeleteButton() {
+    if (!bulkDeleteOpen) return;
+    const count = selectedItemIds.size;
+    bulkDeleteOpen.textContent = `Ta bort valda (${count})`;
+    if (count === 0) {
+      bulkDeleteOpen.setAttribute('disabled', 'true');
+    } else {
+      bulkDeleteOpen.removeAttribute('disabled');
+    }
   }
 
   function updateSortDirectionButton() {
@@ -52,16 +82,29 @@
     );
   }
 
-  function getSortedItems() {
+  function getVisibleItems() {
+    const cutoff = daysSinceUpload
+      ? Date.now() - daysSinceUpload * 24 * 60 * 60 * 1000
+      : 0;
+    const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase('sv-SE');
     const multiplier = sortDirection === 'descending' ? -1 : 1;
-    return [...items].sort((first, second) => {
+    return items
+      .filter((item) => {
+        const matchesName = item.original_name
+          .toLocaleLowerCase('sv-SE')
+          .includes(normalizedSearchTerm);
+        const uploadedAt = new Date(item.created_at.replace(' ', 'T')).getTime();
+        const matchesDate = !cutoff || uploadedAt >= cutoff;
+        return matchesName && matchesDate;
+      })
+      .sort((first, second) => {
       const difference = (first[sortField] - second[sortField]) * multiplier;
       return difference || second.id - first.id;
     });
   }
 
-  function renderSortedItems() {
-    buildGrid(getSortedItems());
+  function renderVisibleItems() {
+    buildGrid(getVisibleItems());
   }
 
   function verdict(save, sell, throwCount) {
@@ -110,6 +153,57 @@
     modalController = components.createModal(modal, modalClose, modalBackdrop);
   }
 
+  if (bulkDeleteModal) {
+    bulkDeleteController = components.createModal(bulkDeleteModal, bulkDeleteClose, bulkDeleteBackdrop);
+  }
+
+  if (bulkDeleteCancel) {
+    bulkDeleteCancel.addEventListener('click', () => bulkDeleteController?.close());
+  }
+
+  if (bulkDeleteOpen) {
+    bulkDeleteOpen.addEventListener('click', () => {
+      const count = selectedItemIds.size;
+      if (count === 0) return;
+      if (bulkDeleteMessage) {
+        bulkDeleteMessage.textContent = `Du håller på att ta bort ${count} föremål. Detta går inte att ångra.`;
+      }
+      setBulkDeleteStatus('');
+      bulkDeleteController?.open();
+    });
+  }
+
+  if (bulkDeleteConfirm) {
+    bulkDeleteConfirm.addEventListener('click', async () => {
+      const ids = [...selectedItemIds];
+      if (ids.length === 0) {
+        bulkDeleteController?.close();
+        return;
+      }
+
+      bulkDeleteConfirm.setAttribute('disabled', 'true');
+      setBulkDeleteStatus('Tar bort valda föremål...');
+      try {
+        const result = await api.post('/items/bulk-delete', { ids });
+        const missingCount = result.missing_ids.length;
+        const deletedCount = result.deleted_ids.length;
+        bulkDeleteController?.close();
+        setStatus(
+          missingCount
+            ? `Tog bort ${deletedCount} föremål. ${missingCount} fanns inte längre.`
+            : `Tog bort ${deletedCount} föremål.`,
+          'success'
+        );
+        selectedItemIds.clear();
+        loadItems();
+      } catch (err) {
+        setBulkDeleteStatus(String(err), 'error');
+      } finally {
+        bulkDeleteConfirm.removeAttribute('disabled');
+      }
+    });
+  }
+
   // ── Delete ────────────────────────────────────────────────────────
 
   if (modalDelete) {
@@ -128,17 +222,21 @@
 
   // ── Build grid ────────────────────────────────────────────────────
 
-  function buildGrid(items) {
+  function buildGrid(visibleItems) {
     if (!itemsGrid) return;
     itemsGrid.innerHTML = '';
 
-    if (items.length === 0) {
-      setStatus('Inga föremål ännu. Ladda upp det första på startsidan!');
+    if (visibleItems.length === 0) {
+      setStatus(
+        items.length === 0
+          ? 'Inga föremål ännu. Ladda upp det första på startsidan!'
+          : 'Inga föremål matchar ditt filter.'
+      );
       return;
     }
 
     setStatus('');
-    items.forEach((item) => {
+    visibleItems.forEach((item) => {
       const v = verdict(item.save_count, item.sell_count, item.throw_count);
 
       const card = document.createElement('div');
@@ -159,11 +257,31 @@
       name.className = 'item-card-name';
       name.textContent = item.original_name;
 
+      const selectorWrap = document.createElement('label');
+      selectorWrap.className = 'item-card-select';
+      const selector = document.createElement('input');
+      selector.type = 'checkbox';
+      selector.checked = selectedItemIds.has(item.id);
+      selector.setAttribute('aria-label', `Markera ${item.original_name}`);
+      selector.addEventListener('click', (event) => event.stopPropagation());
+      selector.addEventListener('keydown', (event) => event.stopPropagation());
+      selector.addEventListener('change', () => {
+        if (selector.checked) {
+          selectedItemIds.add(item.id);
+        } else {
+          selectedItemIds.delete(item.id);
+        }
+        updateBulkDeleteButton();
+      });
+      const selectorText = document.createElement('span');
+      selectorText.textContent = 'Markera';
+      selectorWrap.append(selector, selectorText);
+
       const verdictEl = document.createElement('p');
       verdictEl.className = 'item-card-verdict ' + v.cls;
       verdictEl.textContent = v.text;
 
-      body.append(name, verdictEl);
+      body.append(name, selectorWrap, verdictEl);
       card.append(img, body);
 
       card.addEventListener('click', () => openModal(item));
@@ -173,6 +291,8 @@
 
       itemsGrid.appendChild(card);
     });
+
+    updateBulkDeleteButton();
   }
 
   // ── Load items ────────────────────────────────────────────────────
@@ -181,7 +301,7 @@
     setStatus('Hämtar föremål…');
     try {
       items = await api.get('/items');
-      renderSortedItems();
+      renderVisibleItems();
     } catch (err) {
       setStatus(String(err), 'error');
     }
@@ -190,7 +310,7 @@
   if (sortSelect) {
     sortSelect.addEventListener('change', () => {
       sortField = sortSelect.value;
-      renderSortedItems();
+      renderVisibleItems();
     });
   }
 
@@ -198,11 +318,26 @@
     sortDirectionButton.addEventListener('click', () => {
       sortDirection = sortDirection === 'descending' ? 'ascending' : 'descending';
       updateSortDirectionButton();
-      renderSortedItems();
+      renderVisibleItems();
+    });
+  }
+
+  if (nameFilter) {
+    nameFilter.addEventListener('input', () => {
+      searchTerm = nameFilter.value;
+      renderVisibleItems();
+    });
+  }
+
+  if (dateFilter) {
+    dateFilter.addEventListener('change', () => {
+      daysSinceUpload = Number(dateFilter.value);
+      renderVisibleItems();
     });
   }
 
   // ── Init ──────────────────────────────────────────────────────────
   updateSortDirectionButton();
+  updateBulkDeleteButton();
   loadItems();
 })();

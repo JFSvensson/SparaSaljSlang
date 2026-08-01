@@ -214,6 +214,51 @@ test('HTTP workflow rejects files larger than 10 MB', async () => {
   assert.deepEqual(await response.json(), { error: 'File too large' });
 });
 
+test('HTTP workflow bulk-deletes items and reports missing IDs', async () => {
+  const authenticatedCookie = await login();
+  const firstItem = await uploadImage(authenticatedCookie, 'bulk-first.png');
+  const secondItem = await uploadImage(authenticatedCookie, 'bulk-second.png');
+  const token = await getCsrfToken(authenticatedCookie);
+
+  const response = await fetch(`${baseUrl}/api/items/bulk-delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: authenticatedCookie,
+      'x-csrf-token': token,
+    },
+    body: JSON.stringify({ ids: [firstItem.id, 999999, secondItem.id] }),
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    deleted_ids: [firstItem.id, secondItem.id],
+    missing_ids: [999999],
+  });
+
+  const missingItems = await Promise.all([
+    fetch(`${baseUrl}/api/items/${firstItem.id}`, { headers: { Cookie: authenticatedCookie } }),
+    fetch(`${baseUrl}/api/items/${secondItem.id}`, { headers: { Cookie: authenticatedCookie } }),
+  ]);
+  assert.equal(missingItems[0].status, 404);
+  assert.equal(missingItems[1].status, 404);
+});
+
+test('HTTP workflow bulk-delete rejects invalid ID payloads', async () => {
+  const authenticatedCookie = await login();
+  const token = await getCsrfToken(authenticatedCookie);
+
+  const response = await fetch(`${baseUrl}/api/items/bulk-delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: authenticatedCookie,
+      'x-csrf-token': token,
+    },
+    body: JSON.stringify({ ids: ['x', 1] }),
+  });
+  assert.equal(response.status, 400);
+});
+
 test('HTTP workflow enforces the upload rate limit', async () => {
   const authenticatedCookie = await login();
   let limitedResponse: Response | undefined;

@@ -24,6 +24,14 @@
     <section class="card">
       <h2>Alla uppladdade föremål</h2>
       <div class="list-toolbar">
+        <label class="visually-hidden" for="filter-name">Sök föremål</label>
+        <input id="filter-name" type="search" placeholder="Sök föremål" autocomplete="off" />
+        <label for="filter-date">Uppladdat</label>
+        <select id="filter-date">
+          <option value="all">Alla datum</option>
+          <option value="7">Senaste 7 dagarna</option>
+          <option value="30">Senaste 30 dagarna</option>
+        </select>
         <label for="sort-select">Sortera efter</label>
         <select id="sort-select">
           <option value="save_count">Spara</option>
@@ -37,6 +45,9 @@
           aria-label="Sortera fallande"
           title="Sortera fallande"
         >↓</button>
+        <button id="bulk-delete-open" class="btn btn-throw" type="button" disabled>
+          Ta bort valda (0)
+        </button>
       </div>
       <p id="list-status" class="status-msg"></p>
       <div id="items-grid" class="items-grid"></div>
@@ -70,6 +81,20 @@
       <p class="modal-verdict" id="modal-verdict"></p>
       <div class="modal-actions">
         <button id="modal-delete" class="btn btn-throw">🗑️ Ta bort föremål</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="bulk-delete-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content card">
+      <button id="bulk-delete-close" class="modal-close" aria-label="Stäng">✕</button>
+      <h3>Ta bort valda föremål</h3>
+      <p id="bulk-delete-message" class="login-help"></p>
+      <p id="bulk-delete-status" class="status-msg"></p>
+      <div class="modal-actions">
+        <button id="bulk-delete-cancel" class="btn" type="button">Avbryt</button>
+        <button id="bulk-delete-confirm" class="btn btn-throw" type="button">Ta bort</button>
       </div>
     </div>
   </div>

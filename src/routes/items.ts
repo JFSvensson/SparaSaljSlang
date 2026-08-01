@@ -57,6 +57,14 @@ const uploadLimiter = rateLimit({
   message: { error: 'Upload limit reached, please try again later.' },
 });
 
+const bulkDeleteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Bulk delete limit reached, please try again later.' },
+});
+
 // GET /api/items/summary — overview of current decision leaders
 router.get('/summary', (_req: Request, res: Response) => {
   res.json(itemService.getDecisionSummary());
@@ -106,6 +114,22 @@ router.post(
     res.status(201).json(item);
   }
 );
+
+// POST /api/items/bulk-delete — delete multiple items
+router.post('/bulk-delete', bulkDeleteLimiter, (req: Request, res: Response) => {
+  const { ids } = req.body as { ids?: unknown };
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > 50) {
+    throw new HttpError(400, 'ids must be a non-empty array with at most 50 entries');
+  }
+
+  const normalizedIds = ids.map((value) => parsePositiveInt(String(value)));
+  if (normalizedIds.some((id) => id === null)) {
+    throw new HttpError(400, 'ids must only contain positive integers');
+  }
+
+  const uniqueIds = [...new Set(normalizedIds as number[])];
+  res.json(itemService.deleteItems(uniqueIds));
+});
 
 // DELETE /api/items/:id — delete an item
 router.delete('/:id', (req: Request, res: Response) => {

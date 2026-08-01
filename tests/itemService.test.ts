@@ -100,6 +100,44 @@ test('ItemService summarizes items, votes, and current leading decisions', () =>
   });
 });
 
+test('ItemService bulk-deletes existing items and reports missing IDs', () => {
+  const events: string[] = [];
+  const itemsById = new Map<number, Item>([
+    [1, { ...item, id: 1, filename: 'first.png' }],
+    [2, { ...item, id: 2, filename: 'second.png' }],
+  ]);
+  const itemRepository: ItemRepository = {
+    ...createItemRepository(),
+    getById(id) {
+      return itemsById.get(id);
+    },
+    delete(id) {
+      itemsById.delete(id);
+      events.push(`delete-record:${id}`);
+    },
+  };
+  const fileSystem: FileSystem = {
+    existsSync: () => true,
+    unlinkSync(filePath) {
+      events.push(`delete-file:${filePath}`);
+    },
+  };
+  const service = new ItemService('/uploads', itemRepository, createChoiceRepository(), fileSystem);
+
+  const result = service.deleteItems([2, 3, 1]);
+
+  assert.deepEqual(result, {
+    deleted_ids: [2, 1],
+    missing_ids: [3],
+  });
+  assert.deepEqual(events, [
+    `delete-file:${path.join('/uploads', 'second.png')}`,
+    'delete-record:2',
+    `delete-file:${path.join('/uploads', 'first.png')}`,
+    'delete-record:1',
+  ]);
+});
+
 function noFiles(): FileSystem {
   return {
     existsSync: () => false,

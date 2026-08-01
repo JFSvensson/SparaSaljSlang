@@ -23,6 +23,11 @@ export interface DecisionSummary {
   undecided_items: number;
 }
 
+export interface BulkDeleteResult {
+  deleted_ids: number[];
+  missing_ids: number[];
+}
+
 export interface ItemRepository {
   create(filename: string, originalName: string): Item;
   getAll(): ItemWithChoices[];
@@ -117,6 +122,32 @@ export class ItemService {
     }
 
     this.itemRepository.delete(id);
+  }
+
+  deleteItems(ids: number[]): BulkDeleteResult {
+    const deletedIds: number[] = [];
+    const missingIds: number[] = [];
+
+    ids.forEach((id) => {
+      const item = this.itemRepository.getById(id);
+      if (!item) {
+        missingIds.push(id);
+        return;
+      }
+
+      const filePath = path.join(this.uploadsDir, item.filename);
+      if (this.fileSystem.existsSync(filePath)) {
+        this.fileSystem.unlinkSync(filePath);
+      }
+
+      this.itemRepository.delete(id);
+      deletedIds.push(id);
+    });
+
+    return {
+      deleted_ids: deletedIds,
+      missing_ids: missingIds,
+    };
   }
 
   getChoices(id: number) {
