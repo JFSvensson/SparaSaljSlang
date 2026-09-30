@@ -15,6 +15,7 @@
     <nav>
       <a href="index.html" class="active">Bedöm föremål</a>
       <a href="list.html">Alla föremål</a>
+      <a href="listings.html">Annonsutkast</a>
       <a href="upload.html">Ladda upp föremål</a>
       <button id="logout-btn" class="nav-btn">Logga ut</button>
     </nav>
@@ -42,13 +43,20 @@
       </div>
 
       <div class="choice-buttons">
-        <button class="btn btn-save" data-choice="save">💚 Spara</button>
-        <button class="btn btn-sell" data-choice="sell">💰 Sälj</button>
-        <button class="btn btn-throw" data-choice="throw">🗑️ Släng</button>
+        <button class="btn btn-save" data-choice="save" type="button">💚 Spara</button>
+        <button class="btn btn-sell" data-choice="sell" type="button">💰 Sälj</button>
+        <button class="btn btn-throw" data-choice="throw" type="button">🗑️ Släng</button>
+      </div>
+
+      <p id="vote-progress" class="vote-progress"></p>
+      <p class="vote-progress"><a id="listing-draft-link" class="hidden" href="listings.html">Visa annonsutkast</a></p>
+      <p id="viewer-status" class="status-msg"></p>
+      <div class="choice-buttons">
+        <button id="sell-direct-btn" class="btn btn-sell" type="button">💰 Sälj direkt – skapa annonsutkast</button>
       </div>
 
       <div class="choice-buttons">
-        <button id="delete-current-btn" class="btn btn-throw">🗑️ Ta bort detta föremål</button>
+        <button id="delete-current-btn" class="btn btn-throw" type="button">🗑️ Ta bort detta föremål</button>
       </div>
 
       <div id="vote-result" class="vote-result hidden">

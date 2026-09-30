@@ -1,14 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'path';
-import { Choice, Item } from '../src/db';
-import { ChoiceRepository, FileSystem, ItemRepository, ItemService } from '../src/services/itemService';
+import { Choice, Item, ListingDraft } from '../src/db';
+import {
+  ChoiceRepository,
+  FileSystem,
+  ItemRepository,
+  ItemService,
+  ListingDraftRepository,
+} from '../src/services/itemService';
 
 const item: Item = {
   id: 1,
   filename: 'stored-image.png',
   original_name: 'display-image.png',
   created_at: '2026-07-31 12:00:00',
+  required_votes: 2,
+  sell_direct: 0,
 };
 
 function createItemRepository(currentItem: Item | undefined = item): ItemRepository {
@@ -17,7 +25,14 @@ function createItemRepository(currentItem: Item | undefined = item): ItemReposit
       return { ...item, filename, original_name: originalName };
     },
     getAll() {
-      return currentItem ? [{ ...currentItem, save_count: 0, sell_count: 0, throw_count: 0 }] : [];
+      return currentItem ? [{
+        ...currentItem,
+        save_count: 0,
+        sell_count: 0,
+        throw_count: 0,
+        voter_count: 0,
+        sell_voter_count: 0,
+      }] : [];
     },
     getById(id) {
       return currentItem?.id === id ? currentItem : undefined;
@@ -28,14 +43,20 @@ function createItemRepository(currentItem: Item | undefined = item): ItemReposit
 
 function createChoiceRepository(counts = { save: 0, sell: 0, throw: 0 }): ChoiceRepository {
   return {
-    create(itemId, choice) {
-      return { id: 1, item_id: itemId, choice, created_at: '2026-07-31 12:00:00' } as Choice;
+    create(itemId, choice, voterId) {
+      return { id: 1, item_id: itemId, choice, voter_id: voterId, created_at: '2026-07-31 12:00:00' };
     },
     getByItemId() {
       return [];
     },
     getCounts() {
       return counts;
+    },
+    getVoterStats() {
+      return { voter_count: 0, sell_voter_count: 0 };
+    },
+    getChoiceByVoter() {
+      return undefined;
     },
   };
 }
@@ -50,6 +71,78 @@ test('ItemService creates items through its repository', () => {
   });
 });
 
+test('ItemService creates a draft only after the required distinct voters unanimously choose sell', () => {
+  const votes: Choice[] = [];
+  const choiceRepository: ChoiceRepository = {
+    ...createChoiceRepository(),
+    create(itemId, choice, voterId) {
+      const saved = {
+        id: votes.length + 1,
+        item_id: itemId,
+        choice,
+        voter_id: voterId,
+        created_at: '2026-07-31 12:00:00',
+      };
+      votes.push(saved);
+      return saved;
+    },
+    getCounts() {
+      return {
+        save: votes.filter((vote) => vote.choice === 'save').length,
+        sell: votes.filter((vote) => vote.choice === 'sell').length,
+        throw: votes.filter((vote) => vote.choice === 'throw').length,
+      };
+    },
+    getVoterStats() {
+      return {
+        voter_count: votes.length,
+        sell_voter_count: votes.filter((vote) => vote.choice === 'sell').length,
+      };
+    },
+    getChoiceByVoter(itemId, voterId) {
+      return votes.find((vote) => vote.item_id === itemId && vote.voter_id === voterId);
+    },
+  };
+  const listingDraft: ListingDraft = {
+    id: 1,
+    item_id: 1,
+    title: 'display-image',
+    description: '',
+    price: null,
+    marketplace: 'other',
+    created_at: '2026-07-31 12:00:00',
+    filename: 'stored-image.png',
+    original_name: 'display-image.png',
+  };
+  let draftsCreated = 0;
+  const listingDraftRepository: ListingDraftRepository = {
+    ensureForItem() {
+      draftsCreated += 1;
+      return listingDraft;
+    },
+  };
+  const service = new ItemService(
+    '/uploads',
+    createItemRepository(),
+    choiceRepository,
+    noFiles(),
+    listingDraftRepository
+  );
+
+  const firstVote = service.submitChoice(1, 'sell', 'voter-1');
+  assert.equal(firstVote?.status, 'submitted');
+  assert.equal(firstVote?.status === 'submitted' && firstVote.sell_ready, false);
+  assert.equal(draftsCreated, 0);
+
+  const secondVote = service.submitChoice(1, 'sell', 'voter-2');
+  assert.equal(secondVote?.status, 'submitted');
+  assert.equal(secondVote?.status === 'submitted' ? secondVote.sell_ready : undefined, true);
+  assert.deepEqual(secondVote?.status === 'submitted' ? secondVote.listing_draft : undefined, listingDraft);
+  assert.equal(draftsCreated, 1);
+  assert.equal(service.submitChoice(1, 'sell', 'voter-1')?.status, 'already-voted');
+  assert.equal(service.submitChoice(1, 'sell', 'voter-3')?.status, 'voting-closed');
+});
+
 test('ItemService saves a choice and returns updated counts', () => {
   const service = new ItemService(
     '/uploads',
@@ -58,8 +151,8 @@ test('ItemService saves a choice and returns updated counts', () => {
     noFiles()
   );
 
-  assert.deepEqual(service.submitChoice(1, 'save')?.counts, { save: 1, sell: 0, throw: 0 });
-  assert.equal(service.submitChoice(99, 'save'), null);
+  assert.deepEqual(service.submitChoice(1, 'save', 'voter-1')?.counts, { save: 1, sell: 0, throw: 0 });
+  assert.equal(service.submitChoice(99, 'save', 'voter-1'), null);
 });
 
 test('ItemService deletes the matching image file before deleting its record', () => {
@@ -81,11 +174,11 @@ test('ItemService deletes the matching image file before deleting its record', (
 test('ItemService summarizes items, votes, and current leading decisions', () => {
   const itemRepository = createItemRepository();
   itemRepository.getAll = () => [
-    { ...item, id: 1, save_count: 3, sell_count: 1, throw_count: 0 },
-    { ...item, id: 2, save_count: 1, sell_count: 4, throw_count: 1 },
-    { ...item, id: 3, save_count: 1, sell_count: 1, throw_count: 1 },
-    { ...item, id: 4, save_count: 0, sell_count: 0, throw_count: 0 },
-    { ...item, id: 5, save_count: 0, sell_count: 0, throw_count: 2 },
+    { ...item, id: 1, save_count: 3, sell_count: 1, throw_count: 0, voter_count: 4, sell_voter_count: 1 },
+    { ...item, id: 2, save_count: 1, sell_count: 4, throw_count: 1, voter_count: 6, sell_voter_count: 4 },
+    { ...item, id: 3, save_count: 1, sell_count: 1, throw_count: 1, voter_count: 3, sell_voter_count: 1 },
+    { ...item, id: 4, save_count: 0, sell_count: 0, throw_count: 0, voter_count: 0, sell_voter_count: 0 },
+    { ...item, id: 5, save_count: 0, sell_count: 0, throw_count: 2, voter_count: 2, sell_voter_count: 0 },
   ];
   const service = new ItemService('/uploads', itemRepository, createChoiceRepository(), noFiles());
 

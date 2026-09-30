@@ -14,6 +14,7 @@
   const imagePreview = document.getElementById('image-preview');
   const imagePreviewImage = /** @type {HTMLImageElement} */ (document.getElementById('image-preview-image'));
   const uploadStatus = document.getElementById('upload-status');
+  const viewerStatus = document.getElementById('viewer-status');
   const uploadButton = uploadForm && uploadForm.querySelector('button[type="submit"]');
   const viewerSection = document.getElementById('viewer-section');
   const emptySection = document.getElementById('empty-section');
@@ -22,8 +23,11 @@
   const voteResult = document.getElementById('vote-result');
   const nextBtn = document.getElementById('next-btn');
   const deleteCurrentBtn = document.getElementById('delete-current-btn');
+  const sellDirectButton = document.getElementById('sell-direct-btn');
+  const listingDraftLink = document.getElementById('listing-draft-link');
   const logoutBtn = document.getElementById('logout-btn');
-  const choiceButtons = document.querySelectorAll('.choice-buttons .btn');
+  const choiceButtons = document.querySelectorAll('.choice-buttons [data-choice]');
+  const voteProgress = document.getElementById('vote-progress');
   const summaryItems = document.getElementById('summary-items');
   const summaryVotes = document.getElementById('summary-votes');
   const summarySave = document.getElementById('summary-save');
@@ -37,13 +41,14 @@
   let currentItemId = -1;
   let selectedFile = null;
   let previewUrl = null;
+  let canManageItems = false;
   const maxUploadBytes = 10 * 1024 * 1024;
   const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
   // ── Helpers ──────────────────────────────────────────────────────
 
   function setStatus(msg, type) {
-    ui.setStatus(uploadStatus, msg, type);
+    ui.setStatus(viewerStatus || uploadStatus, msg, type);
   }
 
   function updateBars(save, sell, throwCount) {
@@ -71,8 +76,30 @@
     if (itemName) itemName.textContent = item.original_name;
     if (viewerSection) viewerSection.classList.remove('hidden');
     if (emptySection) emptySection.classList.add('hidden');
-    if (voteResult) voteResult.classList.add('hidden');
-    choiceButtons.forEach((btn) => { btn.removeAttribute('disabled'); });
+    updateBars(item.save_count, item.sell_count, item.throw_count);
+    if (voteResult) voteResult.classList.remove('hidden');
+    const votingClosed = item.sell_direct === 1 || item.voter_count >= item.required_votes;
+    choiceButtons.forEach((btn) => {
+      btn.disabled = Boolean(item.my_choice) || votingClosed;
+    });
+    if (voteProgress) {
+      if (item.sell_direct === 1) {
+        voteProgress.textContent = 'Direktförsäljning vald. Annonsutkastet kan granskas.';
+      } else if (item.sell_ready) {
+        voteProgress.textContent = 'Säljbeslutet är klart och ett annonsutkast har skapats.';
+      } else if (votingClosed) {
+        voteProgress.textContent = `Omröstningen avslutad (${item.voter_count}/${item.required_votes}). Alla väljare behövde välja Sälj för att skapa ett utkast.`;
+      } else if (item.my_choice) {
+        voteProgress.textContent = `Du har röstat. ${item.voter_count} av ${item.required_votes} väljare har röstat.`;
+      } else {
+        voteProgress.textContent = `${item.voter_count} av ${item.required_votes} väljare har röstat. En röst per konto.`;
+      }
+    }
+    if (sellDirectButton) {
+      sellDirectButton.classList.toggle('hidden', item.sell_ready || item.sell_direct === 1);
+    }
+    if (listingDraftLink) listingDraftLink.classList.toggle('hidden', !item.sell_ready && item.sell_direct !== 1);
+    setStatus('');
   }
 
   function showEmpty() {
@@ -135,12 +162,22 @@
 
   async function loadItems() {
     try {
+      const session = await api.get('/session');
+      canManageItems = session.is_administrator;
+      if (deleteCurrentBtn) deleteCurrentBtn.classList.toggle('hidden', !canManageItems);
+      const uploadLink = document.querySelector('nav a[href="upload.html"]');
+      if (uploadLink) uploadLink.classList.toggle('hidden', !canManageItems);
+      if (uploadForm && !canManageItems) {
+        const uploadSection = uploadForm.closest('section');
+        if (uploadSection) uploadSection.classList.add('hidden');
+        setStatus('Endast administratören kan ladda upp föremål.', 'error');
+      }
       items = await api.get('/items');
       if (items.length === 0) {
         showEmpty();
       } else {
         currentIndex = 0;
-        showItem(items[currentIndex]);
+        await showItemById(items[currentIndex].id);
       }
     } catch (err) {
       setStatus(String(err), 'error');
@@ -191,12 +228,12 @@
       setStatus('Laddar upp…');
       if (uploadButton) uploadButton.setAttribute('disabled', 'true');
       try {
+        formData.append('requiredVotes', document.getElementById('required-votes').value);
         const newItem = await api.post('/items', formData);
         setStatus('Uppladdning klar!', 'success');
         clearSelectedFile();
         items.unshift(newItem);
-        currentIndex = 0;
-        showItem(newItem);
+        await showItemById(newItem.id);
         loadSummary();
       } catch (err) {
         setStatus(String(err), 'error');
@@ -208,6 +245,10 @@
 
   // ── Choices ───────────────────────────────────────────────────────
 
+  async function showItemById(id) {
+    showItem(await api.get('/items/' + id));
+  }
+
   choiceButtons.forEach((btn) => {
     btn.addEventListener('click', async () => {
       if (currentItemId === -1) return;
@@ -218,6 +259,11 @@
         const data = await api.post('/items/' + currentItemId + '/choices', { choice });
         updateBars(data.counts.save, data.counts.sell, data.counts.throw);
         if (voteResult) voteResult.classList.remove('hidden');
+        if (data.sell_ready && data.listing_draft) {
+          window.location.href = '/listings.html?draft=' + data.listing_draft.id;
+          return;
+        }
+        await showItemById(currentItemId);
         loadSummary();
       } catch (err) {
         setStatus(String(err), 'error');
@@ -225,6 +271,21 @@
       }
     });
   });
+
+  if (sellDirectButton) {
+    sellDirectButton.addEventListener('click', async () => {
+      if (currentItemId === -1) return;
+      if (!confirm('Skapa ett annonsutkast direkt utan omröstning? Utkastet publiceras inte automatiskt.')) return;
+      sellDirectButton.setAttribute('disabled', 'true');
+      try {
+        const result = await api.post('/items/' + currentItemId + '/sell-direct', {});
+        window.location.href = '/listings.html?draft=' + result.listing_draft.id;
+      } catch (error) {
+        setStatus(String(error), 'error');
+        sellDirectButton.removeAttribute('disabled');
+      }
+    });
+  }
 
   // ── Delete current item ──────────────────────────────────────────
 
@@ -272,9 +333,13 @@
   // ── Next item ─────────────────────────────────────────────────────
 
   if (nextBtn) {
-    nextBtn.addEventListener('click', () => {
+    nextBtn.addEventListener('click', async () => {
       currentIndex = (currentIndex + 1) % items.length;
-      showItem(items[currentIndex]);
+      try {
+        await showItemById(items[currentIndex].id);
+      } catch (error) {
+        setStatus(String(error), 'error');
+      }
     });
   }
 

@@ -1,6 +1,7 @@
 const allowedChoices = ['save', 'sell', 'throw'] as const;
 const allowedImageMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
 const maxOriginalNameLength = 120;
+const usernamePattern = /^[a-zA-Z0-9_-]{3,32}$/;
 
 export function parsePositiveInt(value: string | undefined): number | null {
   if (typeof value !== 'string') {
@@ -33,4 +34,16 @@ export function normalizeOriginalName(value: string): string {
     .trim();
 
   return normalized.slice(0, maxOriginalNameLength) || 'uploaded-image';
+}
+
+export function isValidUsername(value: unknown): value is string {
+  return typeof value === 'string' && usernamePattern.test(value);
+}
+
+export function isValidPassword(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 12 && value.length <= 128;
+}
+
+export function isAllowedMarketplace(value: unknown): value is 'blocket' | 'tradera' | 'other' {
+  return value === 'blocket' || value === 'tradera' || value === 'other';
 }

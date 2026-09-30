@@ -3,6 +3,10 @@ Enkel webbapp för att bestämma om ett föremål ska sparas, säljas eller slä
 
 ## Funktioner
 - Bedöm föremål genom att välja mellan Spara, Sälj eller Släng
+- Skapa väljarkonton med en inbjudningskod och rösta en gång per konto och föremål
+- Ställ in hur många väljare som krävs; sälj kräver att samtliga väljer Sälj
+- Välj Sälj direkt för att skapa ett sparat annonsutkast utan omröstning
+- Granska och komplettera annonsutkast för Blocket, Tradera eller annan marknadsplats
 - Ladda upp bilder av föremål
 - Visa alla uppladdade föremål med sammanställda röster
 - Ta bort föremål och deras uppladdade bilder
@@ -26,6 +30,7 @@ Enkel webbapp för att bestämma om ett föremål ska sparas, säljas eller slä
    ```bash
    export LOGIN_USERNAME="din-anvandare"
    export LOGIN_PASSWORD="ditt-losenord"
+   export REGISTRATION_INVITE_CODE="en-lang-slumpad-inbjudningskod"
    ```
 3. Starta appen:
    ```bash
@@ -48,7 +53,12 @@ För produktion, skapa först en lösenordshash:
 npm run hash-password -- "ditt-losenord"
 ```
 
-Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSWORD_HASH` och `SESSION_SECRET`. Appen vägrar att starta i produktion om någon av dem saknas. `LOGIN_PASSWORD` används endast som lokal utvecklingsfallback och ska inte sättas i produktion.
+Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSWORD_HASH` och `SESSION_SECRET`. Appen vägrar att starta i produktion om någon av dem saknas. `LOGIN_PASSWORD` används endast som lokal utvecklingsfallback och ska inte sättas i produktion. Sätt dessutom `REGISTRATION_INVITE_CODE` till en separat, lång slumpad kod för att tillåta nya väljarkonton; utan den är registreringen avstängd. Koden är gemensam och återanvändbar, så dela den endast med personer som ska kunna rösta.
+
+### Röster och annonsutkast
+Varje föremål får ett krav på 1–50 väljare (standard 2). Varje konto kan rösta en gång per föremål. När antalet röster nås avslutas omröstningen; annonsutkast skapas automatiskt bara om samtliga röster är Sälj. En användare kan också välja **Sälj direkt**, vilket hoppar över omröstningen och skapar ett utkast direkt. Väljarkonton kan rösta och hantera annonsutkast; endast administratörskontot kan ladda upp och ta bort föremål.
+
+Utkast får rubriken från bildens filnamn. Fyll i beskrivning, pris och avsedd marknadsplats under **Annonsutkast**. Utkast sparas lokalt och måste granskas och publiceras manuellt. Appen ansluter inte till Blocket eller Tradera, hanterar inte deras konton och sparar inga marknadsplatslösenord. Tidigare röster som saknar kontoidentitet finns kvar i röststatistiken, men räknas inte mot de nya väljarkraven.
 
 ## VPS med Docker
 1. Installera Docker Engine med Docker Compose på VPS:en.
@@ -56,7 +66,7 @@ Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSW
    ```bash
    cp .env.example .env
    ```
-3. Ersätt alla platshållarvärden i `.env`. Skapa `LOGIN_PASSWORD_HASH` med `npm run hash-password -- "ditt-losenord"` och skapa `SESSION_SECRET` med kommandot ovan.
+3. Ersätt alla platshållarvärden i `.env`. Skapa `LOGIN_PASSWORD_HASH` med `npm run hash-password -- "ditt-losenord"` och skapa unika slumpvärden för `SESSION_SECRET` och `REGISTRATION_INVITE_CODE`.
 4. Bygg och starta appen:
    ```bash
    docker compose up --build -d
@@ -208,8 +218,10 @@ curl http://127.0.0.1:3000/api/health
 ## Användning
 - Öppna appen i webbläsaren på http://localhost:3000
 - Logga in med användarnamn och lösenord som ställts in via miljövariabler
+- Dela `REGISTRATION_INVITE_CODE` med de personer som ska registrera egna väljarkonton
 - Använd startsidan för att bedöma föremål
 - Använd sidan "Alla föremål" för att se och ta bort tidigare uppladdade objekt
+- Använd "Annonsutkast" för att fylla i utkast från enhälliga Sälj-röster eller Sälj direkt
 
 ## Utveckling
 - Bygg projektet med:
@@ -230,4 +242,3 @@ curl http://127.0.0.1:3000/api/health
 - src/config.ts – gemensam konfiguration
 - src/sessionStore.ts – SQLite-lagring för inloggningssessioner
 - public/ – statiska sidor och frontend-skript
-

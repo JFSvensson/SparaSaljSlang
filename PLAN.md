@@ -15,11 +15,15 @@
 - Beslutsöversikt med antal föremål och röster samt aktuella ensamma ledare för Spara, Sälj och Släng.
 - Klientsidiga namn- och datumfilter som samverkar med listans röstsortering och tydliga tomlägen.
 - Massradering via API och listvy med val av flera kort, tydlig bekräftelsemodal och robust resultatåterkoppling.
+- Inbjudningskodsskyddade väljarkonton med en röst per konto och föremål.
+- Konfigurerbart krav på antal röstande; enhälliga Sälj-röster och Sälj direkt skapar sparade annonsutkast.
+- Formulär för att komplettera annonsutkast med beskrivning, pris och avsedd marknadsplats; publicering sker manuellt.
 
 ## Nästa steg
-1. Lägg till CSV-export av föremål, röstetal och aktuellt beslut.
-2. Distribuera på VPS och verifiera Caddy/TLS med den riktiga domänen och produktionshemligheter.
-3. Automatisera regelbunden offsite-kopiering av backup-arkiv.
+1. Undersök officiella integrationsmöjligheter för Blocket och Tradera innan kontokoppling eller automatisk publicering.
+2. Lägg till CSV-export av föremål, röstetal och aktuellt beslut.
+3. Distribuera på VPS och verifiera Caddy/TLS med den riktiga domänen och produktionshemligheter.
+4. Automatisera regelbunden offsite-kopiering av backup-arkiv.
 
 ## Principer
 - Behåll Express, SQLite och statisk vanilla-frontend tills produktens komplexitet motiverar en större förändring.

@@ -5,13 +5,15 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import itemsRouter from './routes/items';
 import { config, validateConfig } from './config';
-import { authenticateUser } from './auth';
+import { authenticateUser, createPasswordHash, verifyPassword } from './auth';
+import { closeDatabase, isDatabaseAvailable, votersDb } from './db';
+import { isValidPassword, isValidUsername } from './validation';
 import { toPublicError } from './errors';
 import { SqliteSessionStore } from './sessionStore';
 import { csrfSynchronisedProtection, generateToken } from './csrf';
-import { closeDatabase, isDatabaseAvailable } from './db';
 import { closeResources } from './shutdown';
 import { createLogger } from './logger';
+import { timingSafeEqual } from 'crypto';
 
 validateConfig();
 const app = express();
@@ -63,7 +65,7 @@ app.use(session({
 }));
 
 function isAuthenticated(req: express.Request): boolean {
-  return req.session.isAuthenticated === true;
+  return req.session.isAuthenticated === true && typeof req.session.voterId === 'string';
 }
 
 // Rate limiting for API routes (protects file-system access)
@@ -81,7 +83,11 @@ app.use((req, res, next) => {
   const isAllowedPath =
     pathname === '/login' ||
     pathname === '/login.html' ||
+    pathname === '/register' ||
+    pathname === '/register.html' ||
     pathname === '/api/login' ||
+    pathname === '/api/register' ||
+    pathname === '/api/auth-options' ||
     pathname === '/api/logout' ||
     pathname === '/api/csrf-token' ||
     pathname === '/api/health' ||
@@ -114,12 +120,28 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ token: generateToken(req) });
 });
 
+app.get('/api/auth-options', (_req, res) => {
+  res.json({ registration_enabled: Boolean(config.registrationInviteCode) });
+});
+
 app.use(csrfSynchronisedProtection);
 
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body as { username?: string; password?: string };
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'För många inloggningsförsök. Försök igen senare.' },
+});
 
-  if (!await authenticateUser(username, password)) {
+app.post('/api/login', loginLimiter, async (req, res) => {
+  const { username, password } = req.body as { username?: string; password?: string };
+  const voter = username ? votersDb.getByUsername(username) : undefined;
+  const authenticated = voter
+    ? await verifyPassword(password ?? '', voter.password_hash)
+    : await authenticateUser(username, password);
+
+  if (!authenticated) {
     return res.status(401).json({ error: 'Fel användarnamn eller lösenord.' });
   }
 
@@ -128,6 +150,8 @@ app.post('/api/login', async (req, res) => {
       return res.status(500).json({ error: 'Could not create session.' });
     }
 
+    req.session.voterId = voter?.id ?? `admin:${config.loginUsername.toLocaleLowerCase('en-US')}`;
+    req.session.isAdministrator = !voter;
     req.session.isAuthenticated = true;
     return req.session.save((saveError) => {
       if (saveError) {
@@ -136,6 +160,63 @@ app.post('/api/login', async (req, res) => {
       return res.json({ ok: true });
     });
   });
+});
+
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'För många registreringsförsök. Försök igen senare.' },
+});
+
+app.post('/api/register', registrationLimiter, async (req, res) => {
+  const { username, password, inviteCode } = req.body as {
+    username?: unknown;
+    password?: unknown;
+    inviteCode?: unknown;
+  };
+  if (!config.registrationInviteCode) {
+    return res.status(503).json({ error: 'Registrering är inte aktiverad.' });
+  }
+  if (
+    typeof inviteCode !== 'string'
+    || !constantTimeStringEqual(inviteCode, config.registrationInviteCode)
+  ) {
+    return res.status(403).json({ error: 'Ogiltig inbjudningskod.' });
+  }
+  if (!isValidUsername(username)) {
+    return res.status(400).json({ error: 'Användarnamnet ska vara 3–32 tecken: bokstäver, siffror, _ eller -.' });
+  }
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ error: 'Lösenordet ska vara 12–128 tecken.' });
+  }
+  if (username.toLocaleLowerCase('en-US') === config.loginUsername.toLocaleLowerCase('en-US')) {
+    return res.status(409).json({ error: 'Användarnamnet är redan upptaget.' });
+  }
+  if (votersDb.getByUsername(username)) {
+    return res.status(409).json({ error: 'Användarnamnet är redan upptaget.' });
+  }
+
+  const voter = votersDb.create(username, createPasswordHash(password));
+  req.session.regenerate((error) => {
+    if (error) {
+      return res.status(500).json({ error: 'Could not create session.' });
+    }
+    req.session.voterId = voter.id;
+    req.session.isAdministrator = false;
+    req.session.isAuthenticated = true;
+    return req.session.save((saveError) => {
+      if (saveError) {
+        return res.status(500).json({ error: 'Could not save session.' });
+      }
+      return res.status(201).json({ ok: true });
+    });
+  });
+});
+
+app.get('/api/session', (req, res) => {
+  res.json({ is_administrator: req.session.isAdministrator === true });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -180,6 +261,12 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   }
   res.status(publicError.status).json(publicError.body);
 });
+
+function constantTimeStringEqual(first: string, second: string): boolean {
+  const firstBuffer = Buffer.from(first);
+  const secondBuffer = Buffer.from(second);
+  return firstBuffer.length === secondBuffer.length && timingSafeEqual(firstBuffer, secondBuffer);
+}
 
 const server = app.listen(PORT, () => {
   logger.info('server_started', { port: PORT });

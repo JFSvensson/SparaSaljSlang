@@ -4,6 +4,20 @@
   const form = document.getElementById('login-form');
   const status = document.getElementById('login-status');
 
+  fetch('/api/auth-options')
+    .then((response) => response.json())
+    .then((options) => {
+      if (options.registration_enabled) {
+        document.getElementById('registration-link').classList.remove('hidden');
+      }
+    })
+    .catch((error) => {
+      const registrationLink = document.getElementById('registration-link');
+      registrationLink.classList.remove('hidden');
+      registrationLink.textContent = 'Kunde inte kontrollera registreringens status. Försök igen senare.';
+      console.error('Could not load registration options', error);
+    });
+
   async function getCsrfToken() {
     const response = await fetch('/api/csrf-token');
     const body = await response.json();

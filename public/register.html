@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skapa väljarkonto – SparaSäljSläng</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>🗃️ Spara, sälj eller släng?</h1>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Skapa väljarkonto</h2>
+      <p class="login-help">Registreringen kräver en inbjudningskod från appens administratör.</p>
+      <form id="register-form" class="login-form">
+        <label>
+          Användarnamn
+          <input type="text" id="username" name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_\-]{3,32}" autocomplete="username" required />
+        </label>
+        <label>
+          Lösenord (minst 12 tecken)
+          <input type="password" id="password" name="password" minlength="12" maxlength="128" autocomplete="new-password" required />
+        </label>
+        <label>
+          Inbjudningskod
+          <input type="password" id="invite-code" name="inviteCode" autocomplete="off" required />
+        </label>
+        <button type="submit" class="btn btn-upload">Skapa konto</button>
+      </form>
+      <p id="register-status" class="status-msg"></p>
+      <a href="login.html">Tillbaka till inloggning</a>
+    </section>
+  </main>
+
+  <script src="register.js"></script>
+</body>
+</html>
