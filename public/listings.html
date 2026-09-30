@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SparaSäljSläng &mdash; Annonsutkast</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-brand">
+      <h1>🗃️ Spara, sälj eller släng?</h1>
+      <span class="header-pill">Annonsutkast</span>
+    </div>
+    <nav>
+      <a href="index.html">Bedöm föremål</a>
+      <a href="list.html">Alla föremål</a>
+      <a href="listings.html" class="active">Annonsutkast</a>
+      <a href="upload.html">Ladda upp föremål</a>
+      <button id="logout-btn" class="nav-btn" type="button">Logga ut</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Annonsutkast</h2>
+      <p class="login-help">Utkasten sparas här för granskning. De publiceras inte automatiskt och inga marknadsplatslösenord sparas.</p>
+      <p id="listings-status" class="status-msg"></p>
+      <div id="listing-drafts" class="listing-drafts"></div>
+    </section>
+  </main>
+
+  <script src="client.js"></script>
+  <script src="ui.js"></script>
+  <script src="listings.js"></script>
+</body>
+</html>

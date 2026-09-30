@@ -11,6 +11,7 @@ export const config = {
   loginUsername: process.env.LOGIN_USERNAME?.trim() || 'admin',
   loginPassword: process.env.LOGIN_PASSWORD?.trim() || 'change-me',
   loginPasswordHash: process.env.LOGIN_PASSWORD_HASH?.trim(),
+  registrationInviteCode: process.env.REGISTRATION_INVITE_CODE?.trim(),
   isProduction,
   sessionSecret: process.env.SESSION_SECRET?.trim() || 'development-session-secret',
   sessionMaxAgeMs: 8 * 60 * 60 * 1000,

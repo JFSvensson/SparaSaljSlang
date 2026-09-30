@@ -4,6 +4,9 @@ import {
   parsePositiveInt,
   isAllowedChoice,
   isAllowedImageMimeType,
+  isAllowedMarketplace,
+  isValidPassword,
+  isValidUsername,
   normalizeOriginalName,
 } from '../src/validation';
 
@@ -49,4 +52,19 @@ test('normalizeOriginalName removes path segments and unsafe characters', () => 
 test('normalizeOriginalName supplies a fallback and limits display-name length', () => {
   assert.equal(normalizeOriginalName('\u0000\u0001'), 'uploaded-image');
   assert.equal(normalizeOriginalName('a'.repeat(121)).length, 120);
+});
+
+test('voter account validation accepts bounded usernames and passwords', () => {
+  assert.equal(isValidUsername('family_voter-1'), true);
+  assert.equal(isValidUsername('ab'), false);
+  assert.equal(isValidUsername('invalid name'), false);
+  assert.equal(isValidPassword('long-enough-password'), true);
+  assert.equal(isValidPassword('short'), false);
+});
+
+test('marketplace validation accepts only supported options', () => {
+  assert.equal(isAllowedMarketplace('blocket'), true);
+  assert.equal(isAllowedMarketplace('tradera'), true);
+  assert.equal(isAllowedMarketplace('other'), true);
+  assert.equal(isAllowedMarketplace('unknown'), false);
 });

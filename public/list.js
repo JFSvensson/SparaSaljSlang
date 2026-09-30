@@ -21,6 +21,7 @@
   const modalImage = /** @type {HTMLImageElement} */ (document.getElementById('modal-image'));
   const modalName = document.getElementById('modal-name');
   const modalVerdict = document.getElementById('modal-verdict');
+  const modalVoteProgress = document.getElementById('modal-vote-progress');
   const modalDelete = document.getElementById('modal-delete');
   const modalBarSave = document.getElementById('modal-bar-save');
   const modalBarSell = document.getElementById('modal-bar-sell');
@@ -38,6 +39,7 @@
   const bulkDeleteStatus = document.getElementById('bulk-delete-status');
 
   let currentItemId = -1;
+  let canManageItems = false;
   let modalController = null;
   let bulkDeleteController = null;
   let items = [];
@@ -59,6 +61,7 @@
 
   function updateBulkDeleteButton() {
     if (!bulkDeleteOpen) return;
+    bulkDeleteOpen.classList.toggle('hidden', !canManageItems);
     const count = selectedItemIds.size;
     bulkDeleteOpen.textContent = `Ta bort valda (${count})`;
     if (count === 0) {
@@ -107,17 +110,19 @@
     buildGrid(getVisibleItems());
   }
 
-  function verdict(save, sell, throwCount) {
+  function verdict(save, sell, throwCount, item) {
+    if (item.sell_direct) return { text: '💰 Sälj direkt – utkast klart', cls: 'verdict-sell' };
+    if (item.sell_ready) return { text: '💰 Sälj godkänt – utkast klart', cls: 'verdict-sell' };
     const max = Math.max(save, sell, throwCount);
     if (max === 0) return { text: 'Inga röster ännu', cls: 'verdict-tie' };
     const leaders = [save, sell, throwCount].filter((v) => v === max).length;
     if (leaders > 1) return { text: 'Oavgjort', cls: 'verdict-tie' };
     if (save === max) return { text: '💚 Spara!', cls: 'verdict-save' };
-    if (sell === max) return { text: '💰 Sälj!', cls: 'verdict-sell' };
+    if (sell === max) return { text: `💰 Sälj under omröstning (${item.voter_count}/${item.required_votes})`, cls: 'verdict-tie' };
     return { text: '🗑️ Släng!', cls: 'verdict-throw' };
   }
 
-  function updateModalBars(save, sell, throwCount) {
+  function updateModalBars(save, sell, throwCount, item) {
     const total = save + sell + throwCount || 1;
     if (modalBarSave) modalBarSave.style.width = (save / total * 100) + '%';
     if (modalBarSell) modalBarSell.style.width = (sell / total * 100) + '%';
@@ -126,10 +131,19 @@
     if (modalCountSell) modalCountSell.textContent = String(sell);
     if (modalCountThrow) modalCountThrow.textContent = String(throwCount);
 
-    const v = verdict(save, sell, throwCount);
+    const v = verdict(save, sell, throwCount, item);
     if (modalVerdict) {
       modalVerdict.textContent = v.text;
       modalVerdict.className = 'modal-verdict ' + v.cls;
+    }
+    if (modalVoteProgress) {
+      modalVoteProgress.textContent = item.sell_direct
+        ? 'Direktförsäljning vald.'
+        : item.sell_ready
+          ? 'Säljbeslutet är klart och ett annonsutkast har skapats.'
+          : item.voter_count >= item.required_votes
+            ? 'Omröstningen är avslutad utan enhälligt Sälj.'
+            : `Sälj kräver ${item.required_votes} röster där samtliga väljer Sälj. ${item.voter_count} har röstat hittills.`;
     }
   }
 
@@ -140,7 +154,7 @@
       modalImage.alt = item.original_name;
     }
     if (modalName) modalName.textContent = item.original_name;
-    updateModalBars(item.save_count, item.sell_count, item.throw_count);
+    updateModalBars(item.save_count, item.sell_count, item.throw_count, item);
     modalController?.open();
   }
 
@@ -237,7 +251,7 @@
 
     setStatus('');
     visibleItems.forEach((item) => {
-      const v = verdict(item.save_count, item.sell_count, item.throw_count);
+      const v = verdict(item.save_count, item.sell_count, item.throw_count, item);
 
       const card = document.createElement('div');
       card.className = 'item-card';
@@ -257,31 +271,34 @@
       name.className = 'item-card-name';
       name.textContent = item.original_name;
 
-      const selectorWrap = document.createElement('label');
-      selectorWrap.className = 'item-card-select';
-      const selector = document.createElement('input');
-      selector.type = 'checkbox';
-      selector.checked = selectedItemIds.has(item.id);
-      selector.setAttribute('aria-label', `Markera ${item.original_name}`);
-      selector.addEventListener('click', (event) => event.stopPropagation());
-      selector.addEventListener('keydown', (event) => event.stopPropagation());
-      selector.addEventListener('change', () => {
-        if (selector.checked) {
-          selectedItemIds.add(item.id);
-        } else {
-          selectedItemIds.delete(item.id);
-        }
-        updateBulkDeleteButton();
-      });
-      const selectorText = document.createElement('span');
-      selectorText.textContent = 'Markera';
-      selectorWrap.append(selector, selectorText);
-
       const verdictEl = document.createElement('p');
       verdictEl.className = 'item-card-verdict ' + v.cls;
       verdictEl.textContent = v.text;
 
-      body.append(name, selectorWrap, verdictEl);
+      body.append(name);
+      if (canManageItems) {
+        const selectorWrap = document.createElement('label');
+        selectorWrap.className = 'item-card-select';
+        const selector = document.createElement('input');
+        selector.type = 'checkbox';
+        selector.checked = selectedItemIds.has(item.id);
+        selector.setAttribute('aria-label', `Markera ${item.original_name}`);
+        selector.addEventListener('click', (event) => event.stopPropagation());
+        selector.addEventListener('keydown', (event) => event.stopPropagation());
+        selector.addEventListener('change', () => {
+          if (selector.checked) {
+            selectedItemIds.add(item.id);
+          } else {
+            selectedItemIds.delete(item.id);
+          }
+          updateBulkDeleteButton();
+        });
+        const selectorText = document.createElement('span');
+        selectorText.textContent = 'Markera';
+        selectorWrap.append(selector, selectorText);
+        body.appendChild(selectorWrap);
+      }
+      body.appendChild(verdictEl);
       card.append(img, body);
 
       card.addEventListener('click', () => openModal(item));
@@ -300,6 +317,12 @@
   async function loadItems() {
     setStatus('Hämtar föremål…');
     try {
+      const session = await api.get('/session');
+      canManageItems = session.is_administrator;
+      if (modalDelete) modalDelete.classList.toggle('hidden', !canManageItems);
+      if (bulkDeleteOpen) bulkDeleteOpen.classList.toggle('hidden', !canManageItems);
+      const uploadLink = document.querySelector('nav a[href="upload.html"]');
+      if (uploadLink) uploadLink.classList.toggle('hidden', !canManageItems);
       items = await api.get('/items');
       renderVisibleItems();
     } catch (err) {

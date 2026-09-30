@@ -5,9 +5,11 @@ import fs from 'fs';
 import path from 'path';
 import { ItemService } from '../services/itemService';
 import { config } from '../config';
+import { listingDraftsDb } from '../db';
 import {
   isAllowedChoice,
   isAllowedImageMimeType,
+  isAllowedMarketplace,
   normalizeOriginalName,
   parsePositiveInt,
 } from '../validation';
@@ -65,9 +67,28 @@ const bulkDeleteLimiter = rateLimit({
   message: { error: 'Bulk delete limit reached, please try again later.' },
 });
 
+const listingDraftLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'För många annonsutkast. Försök igen senare.' },
+});
+
+function requireAdministrator(req: Request, _res: Response, next: NextFunction): void {
+  if (!req.session.isAdministrator) {
+    throw new HttpError(403, 'Endast administratören får hantera uppladdningar och borttagning.');
+  }
+  next();
+}
+
 // GET /api/items/summary — overview of current decision leaders
 router.get('/summary', (_req: Request, res: Response) => {
   res.json(itemService.getDecisionSummary());
+});
+
+router.get('/listings', (_req: Request, res: Response) => {
+  res.json(listingDraftsDb.getAll());
 });
 
 // GET /api/items — list all items with choice counts
@@ -83,7 +104,7 @@ router.get('/:id', (req: Request, res: Response) => {
   if (id === null) {
     throw new HttpError(400, 'Invalid id');
   }
-  const item = itemService.getItem(id);
+  const item = itemService.getItem(id, req.session.voterId);
   if (!item) {
     throw new HttpError(404, 'Item not found');
   }
@@ -93,6 +114,7 @@ router.get('/:id', (req: Request, res: Response) => {
 // POST /api/items — upload a new item
 router.post(
   '/',
+  requireAdministrator,
   uploadLimiter,
   (req: Request, res: Response, next: NextFunction) => {
     upload.single('image')(req, res, (err: unknown) => {
@@ -107,16 +129,22 @@ router.post(
     if (!req.file) {
       throw new HttpError(400, 'No image file provided');
     }
+    const requiredVotes = req.body.requiredVotes === undefined ? 2 : Number(req.body.requiredVotes);
+    if (!Number.isInteger(requiredVotes) || requiredVotes < 1 || requiredVotes > 50) {
+      fs.unlinkSync(req.file.path);
+      throw new HttpError(400, 'requiredVotes must be an integer between 1 and 50');
+    }
     const item = itemService.createItem(
       req.file.filename,
-      normalizeOriginalName(req.file.originalname)
+      normalizeOriginalName(req.file.originalname),
+      requiredVotes
     );
     res.status(201).json(item);
   }
 );
 
 // POST /api/items/bulk-delete — delete multiple items
-router.post('/bulk-delete', bulkDeleteLimiter, (req: Request, res: Response) => {
+router.post('/bulk-delete', requireAdministrator, bulkDeleteLimiter, (req: Request, res: Response) => {
   const { ids } = req.body as { ids?: unknown };
   if (!Array.isArray(ids) || ids.length === 0 || ids.length > 50) {
     throw new HttpError(400, 'ids must be a non-empty array with at most 50 entries');
@@ -132,7 +160,7 @@ router.post('/bulk-delete', bulkDeleteLimiter, (req: Request, res: Response) => 
 });
 
 // DELETE /api/items/:id — delete an item
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireAdministrator, (req: Request, res: Response) => {
   const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parsePositiveInt(idParam);
   if (id === null) {
@@ -173,11 +201,71 @@ router.post('/:id/choices', (req: Request, res: Response) => {
   if (!isAllowedChoice(choice)) {
     throw new HttpError(400, 'Choice must be one of: save, sell, throw');
   }
-  const result = itemService.submitChoice(id, choice as 'save' | 'sell' | 'throw');
+  if (!req.session.voterId) {
+    throw new HttpError(401, 'Logga in igen för att rösta med ditt väljarkonto.');
+  }
+  const result = itemService.submitChoice(id, choice, req.session.voterId);
   if (!result) {
     throw new HttpError(404, 'Item not found');
   }
-  res.status(201).json({ choice: result.choice, counts: result.counts });
+  if (result.status === 'already-voted') {
+    throw new HttpError(409, 'Du har redan röstat på det här föremålet.');
+  }
+  if (result.status === 'voting-closed') {
+    throw new HttpError(409, 'Omröstningen är avslutad.');
+  }
+  res.status(201).json(result);
+});
+
+// POST /api/items/:id/sell-direct — skip voting and mark an item for direct sale
+router.post('/:id/sell-direct', listingDraftLimiter, (req: Request, res: Response) => {
+  const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parsePositiveInt(idParam);
+  if (id === null) {
+    throw new HttpError(400, 'Invalid id');
+  }
+  const item = itemService.sellDirect(id);
+  if (!item) {
+    throw new HttpError(404, 'Item not found');
+  }
+  res.json(item);
+});
+
+router.patch('/listings/:id', (req: Request, res: Response) => {
+  const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parsePositiveInt(idParam);
+  if (id === null) {
+    throw new HttpError(400, 'Invalid listing draft id');
+  }
+  const { title, description, price, marketplace } = req.body as {
+    title?: unknown;
+    description?: unknown;
+    price?: unknown;
+    marketplace?: unknown;
+  };
+  if (typeof title !== 'string' || !title.trim() || title.trim().length > 120) {
+    throw new HttpError(400, 'Titeln måste innehålla 1–120 tecken.');
+  }
+  if (typeof description !== 'string' || description.trim().length > 4000) {
+    throw new HttpError(400, 'Beskrivningen får vara högst 4000 tecken.');
+  }
+  const parsedPrice = typeof price === 'number' && Number.isInteger(price) ? price : Number.NaN;
+  if (parsedPrice < 1 || parsedPrice > 1_000_000) {
+    throw new HttpError(400, 'Priset måste vara ett heltal mellan 1 och 1 000 000 kr.');
+  }
+  if (!isAllowedMarketplace(marketplace)) {
+    throw new HttpError(400, 'Välj Blocket, Tradera eller Annan marknadsplats.');
+  }
+  const draft = listingDraftsDb.update(id, {
+    title: title.trim(),
+    description: description.trim(),
+    price: parsedPrice,
+    marketplace,
+  });
+  if (!draft) {
+    throw new HttpError(404, 'Annonsutkastet hittades inte.');
+  }
+  res.json(draft);
 });
 
 export default router;

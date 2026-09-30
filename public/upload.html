@@ -15,6 +15,7 @@
     <nav>
       <a href="index.html">Bedöm föremål</a>
       <a href="list.html">Alla föremål</a>
+      <a href="listings.html">Annonsutkast</a>
       <a href="upload.html" class="active">Ladda upp föremål</a>
       <button id="logout-btn" class="nav-btn">Logga ut</button>
     </nav>
@@ -33,6 +34,11 @@
         <div id="image-preview" class="image-preview hidden">
           <img id="image-preview-image" alt="Förhandsvisning av vald bild" />
         </div>
+        <label class="form-field">
+          Antal väljare som måste rösta (1–50)
+          <input type="number" id="required-votes" name="requiredVotes" min="1" max="50" value="2" required />
+          <span class="file-label-hint">Ett säljannonsutkast skapas bara om alla väljare väljer Sälj.</span>
+        </label>
         <button type="submit" class="btn btn-upload">Ladda upp</button>
       </form>
       <p id="upload-status" class="status-msg"></p>

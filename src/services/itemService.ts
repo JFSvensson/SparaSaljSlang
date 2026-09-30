@@ -1,6 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import { Choice, Item, ItemWithChoices, itemsDb, choicesDb } from '../db';
+import {
+  Choice,
+  Item,
+  ItemWithChoices,
+  ListingDraft,
+  itemsDb,
+  choicesDb,
+  listingDraftsDb,
+} from '../db';
 import { config } from '../config';
 
 export interface ItemSummary {
@@ -11,6 +19,11 @@ export interface ItemSummary {
   save_count: number;
   sell_count: number;
   throw_count: number;
+  required_votes: number;
+  sell_direct: number;
+  voter_count: number;
+  sell_voter_count: number;
+  sell_ready: boolean;
 }
 
 export interface DecisionSummary {
@@ -29,17 +42,47 @@ export interface BulkDeleteResult {
 }
 
 export interface ItemRepository {
-  create(filename: string, originalName: string): Item;
+  create(filename: string, originalName: string, requiredVotes: number): Item;
   getAll(): ItemWithChoices[];
   getById(id: number): Item | undefined;
   delete(id: number): void;
 }
 
 export interface ChoiceRepository {
-  create(itemId: number, choice: 'save' | 'sell' | 'throw'): Choice;
+  create(itemId: number, choice: 'save' | 'sell' | 'throw', voterId: string): Choice;
   getByItemId(itemId: number): Choice[];
   getCounts(itemId: number): { save: number; sell: number; throw: number };
+  getVoterStats(itemId: number): { voter_count: number; sell_voter_count: number };
+  getChoiceByVoter(itemId: number, voterId: string): Choice | undefined;
 }
+
+export interface ListingDraftRepository {
+  ensureForItem(itemId: number, directSale?: boolean): ListingDraft | undefined;
+}
+
+export type ChoiceSubmissionResult =
+  | {
+    status: 'already-voted';
+    choice: Choice;
+    counts: { save: number; sell: number; throw: number };
+    voter_count: number;
+    sell_voter_count: number;
+    required_votes: number;
+  }
+  | {
+    status: 'voting-closed';
+    counts: { save: number; sell: number; throw: number };
+  }
+  | {
+    status: 'submitted';
+    choice: Choice;
+    counts: { save: number; sell: number; throw: number };
+    voter_count: number;
+    sell_voter_count: number;
+    required_votes: number;
+    sell_ready: boolean;
+    listing_draft?: ListingDraft;
+  };
 
 export interface FileSystem {
   existsSync(path: string): boolean;
@@ -51,11 +94,16 @@ export class ItemService {
     private readonly uploadsDir: string = config.uploadsDir,
     private readonly itemRepository: ItemRepository = itemsDb,
     private readonly choiceRepository: ChoiceRepository = choicesDb,
-    private readonly fileSystem: FileSystem = fs
+    private readonly fileSystem: FileSystem = fs,
+    private readonly listingDraftRepository: ListingDraftRepository = listingDraftsDb
   ) {}
 
   listItems(): ItemSummary[] {
-    return this.itemRepository.getAll();
+    return this.itemRepository.getAll().map((item) => ({
+      ...item,
+      sell_ready: item.sell_direct === 1
+        || (item.voter_count >= item.required_votes && item.sell_voter_count === item.required_votes),
+    }));
   }
 
   getDecisionSummary(): DecisionSummary {
@@ -96,18 +144,26 @@ export class ItemService {
     });
   }
 
-  getItem(id: number) {
+  getItem(id: number, voterId?: string) {
     const item = this.itemRepository.getById(id);
     if (!item) {
       return null;
     }
 
     const counts = this.choiceRepository.getCounts(id);
-    return { ...item, ...counts };
+    const voterStats = this.choiceRepository.getVoterStats(id);
+    return {
+      ...item,
+      ...counts,
+      ...voterStats,
+      my_choice: voterId ? this.choiceRepository.getChoiceByVoter(id, voterId)?.choice ?? null : null,
+      sell_ready: item.sell_direct === 1
+        || (voterStats.voter_count >= item.required_votes && voterStats.sell_voter_count === item.required_votes),
+    };
   }
 
-  createItem(filename: string, originalName: string) {
-    return this.itemRepository.create(filename, originalName);
+  createItem(filename: string, originalName: string, requiredVotes = 2) {
+    return this.itemRepository.create(filename, originalName, requiredVotes);
   }
 
   deleteItem(id: number): void {
@@ -157,19 +213,59 @@ export class ItemService {
     }
 
     return {
-      choices: this.choiceRepository.getByItemId(id),
+      choices: this.choiceRepository.getByItemId(id).map(({ voter_id: _voterId, ...choice }) => choice),
       counts: this.choiceRepository.getCounts(id),
     };
   }
 
-  submitChoice(id: number, choice: 'save' | 'sell' | 'throw') {
+  submitChoice(id: number, choice: 'save' | 'sell' | 'throw', voterId: string): ChoiceSubmissionResult | null {
     const item = this.itemRepository.getById(id);
     if (!item) {
       return null;
     }
 
-    const saved = this.choiceRepository.create(id, choice);
+    const voterStats = this.choiceRepository.getVoterStats(id);
+    const existingChoice = this.choiceRepository.getChoiceByVoter(id, voterId);
+    if (existingChoice) {
+      return {
+        status: 'already-voted',
+        choice: existingChoice,
+        counts: this.choiceRepository.getCounts(id),
+        ...voterStats,
+        required_votes: item.required_votes,
+      };
+    }
+    if (item.sell_direct === 1 || voterStats.voter_count >= item.required_votes) {
+      return { status: 'voting-closed', counts: this.choiceRepository.getCounts(id) };
+    }
+
+    const saved = this.choiceRepository.create(id, choice, voterId);
     const counts = this.choiceRepository.getCounts(id);
-    return { choice: saved, counts };
+    const updatedStats = this.choiceRepository.getVoterStats(id);
+    return {
+      status: 'submitted',
+      choice: saved,
+      counts,
+      ...updatedStats,
+      required_votes: item.required_votes,
+      sell_ready: updatedStats.voter_count >= item.required_votes
+        && updatedStats.sell_voter_count === item.required_votes,
+      listing_draft: updatedStats.voter_count >= item.required_votes
+        && updatedStats.sell_voter_count === item.required_votes
+        ? this.listingDraftRepository.ensureForItem(id)
+        : undefined,
+    };
+  }
+
+  sellDirect(id: number) {
+    const item = this.itemRepository.getById(id);
+    if (!item) {
+      return null;
+    }
+    const listingDraft = this.listingDraftRepository.ensureForItem(id, true);
+    if (!listingDraft) {
+      return null;
+    }
+    return { item: this.getItem(id), listing_draft: listingDraft };
   }
 }

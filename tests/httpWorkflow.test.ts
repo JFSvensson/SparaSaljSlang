@@ -25,6 +25,7 @@ test.before(async () => {
       PORT: String(port),
       LOGIN_USERNAME: 'workflow-admin',
       LOGIN_PASSWORD: 'workflow-password',
+      REGISTRATION_INVITE_CODE: 'workflow-invite-code',
     },
     stdio: 'ignore',
   });
@@ -165,6 +166,12 @@ test('HTTP workflow rejects invalid uploads and invalid item IDs', async () => {
   });
   assert.equal(missingFileResponse.status, 400);
 
+  const uploadDirectory = path.join(appRoot, 'uploads');
+  const filesBeforeInvalidThreshold = await fs.readdir(uploadDirectory);
+  const invalidThresholdResponse = await uploadImageRequest(authenticatedCookie, 'invalid-threshold.png', 2.5);
+  assert.equal(invalidThresholdResponse.status, 400);
+  assert.deepEqual(await fs.readdir(uploadDirectory), filesBeforeInvalidThreshold);
+
   const invalidIdResponse = await fetch(`${baseUrl}/api/items/not-an-id`, {
     headers: { Cookie: authenticatedCookie },
   });
@@ -193,6 +200,92 @@ test('HTTP workflow persists a valid vote and returns updated counts', async () 
   assert.equal(voteResult.choice.item_id, item.id);
   assert.equal(voteResult.choice.choice, 'save');
   assert.deepEqual(voteResult.counts, { save: 1, sell: 0, throw: 0 });
+
+  const choicesResponse = await fetch(`${baseUrl}/api/items/${item.id}/choices`, {
+    headers: { Cookie: authenticatedCookie },
+  });
+  const choices = await choicesResponse.json() as { choices: Record<string, unknown>[] };
+  assert.equal(choicesResponse.status, 200);
+  assert.equal('voter_id' in choices.choices[0], false);
+});
+
+test('HTTP workflow requires unique voters for unanimous sell and creates editable drafts', async () => {
+  const adminCookie = await login();
+  const item = await uploadImage(adminCookie, 'consensus-item.png', 2);
+  const adminSessionResponse = await fetch(`${baseUrl}/api/session`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.deepEqual(await adminSessionResponse.json(), { is_administrator: true });
+
+  const authOptionsResponse = await fetch(`${baseUrl}/api/auth-options`);
+  assert.deepEqual(await authOptionsResponse.json(), { registration_enabled: true });
+
+  const invalidRegistration = await registerUser('invalid-voter', 'wrong-invite-code');
+  assert.equal(invalidRegistration.status, 403);
+
+  const firstVoterCookie = await registerAndGetCookie('voter-one');
+  const secondVoterCookie = await registerAndGetCookie('voter-two');
+  const voterSessionResponse = await fetch(`${baseUrl}/api/session`, {
+    headers: { Cookie: secondVoterCookie },
+  });
+  assert.deepEqual(await voterSessionResponse.json(), { is_administrator: false });
+  const restrictedDeleteToken = await getCsrfToken(firstVoterCookie);
+  const restrictedDelete = await fetch(`${baseUrl}/api/items/${item.id}`, {
+    method: 'DELETE',
+    headers: { Cookie: firstVoterCookie, 'x-csrf-token': restrictedDeleteToken },
+  });
+  assert.equal(restrictedDelete.status, 403);
+
+  const firstVoteResponse = await submitVote(firstVoterCookie, item.id, 'sell');
+  assert.equal(firstVoteResponse.status, 201);
+  const firstVote = await firstVoteResponse.json() as { sell_ready: boolean; voter_count: number };
+  assert.equal(firstVote.sell_ready, false);
+  assert.equal(firstVote.voter_count, 1);
+
+  assert.equal((await submitVote(firstVoterCookie, item.id, 'sell')).status, 409);
+  const secondVoteResponse = await submitVote(secondVoterCookie, item.id, 'sell');
+  assert.equal(secondVoteResponse.status, 201);
+  const secondVote = await secondVoteResponse.json() as {
+    sell_ready: boolean;
+    listing_draft: { id: number; title: string };
+  };
+  assert.equal(secondVote.sell_ready, true);
+  assert.equal(secondVote.listing_draft.title, 'consensus-item');
+
+  const updateToken = await getCsrfToken(secondVoterCookie);
+  const updateResponse = await fetch(`${baseUrl}/api/items/listings/${secondVote.listing_draft.id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: secondVoterCookie,
+      'x-csrf-token': updateToken,
+    },
+    body: JSON.stringify({
+      title: 'Välskött föremål',
+      description: 'Fungerar bra och säljs i befintligt skick.',
+      price: 250,
+      marketplace: 'tradera',
+    }),
+  });
+  assert.equal(updateResponse.status, 200);
+  const savedDraft = await updateResponse.json() as { title: string; price: number; marketplace: string };
+  assert.equal(savedDraft.title, 'Välskött föremål');
+  assert.equal(savedDraft.price, 250);
+  assert.equal(savedDraft.marketplace, 'tradera');
+
+  const directItem = await uploadImage(adminCookie, 'direct-sale.png', 3);
+  const directToken = await getCsrfToken(firstVoterCookie);
+  const directResponse = await fetch(`${baseUrl}/api/items/${directItem.id}/sell-direct`, {
+    method: 'POST',
+    headers: { Cookie: firstVoterCookie, 'x-csrf-token': directToken },
+  });
+  assert.equal(directResponse.status, 200);
+  const directResult = await directResponse.json() as {
+    item: { sell_direct: number };
+    listing_draft: { id: number; title: string };
+  };
+  assert.equal(directResult.item.sell_direct, 1);
+  assert.equal(directResult.listing_draft.title, 'direct-sale');
 });
 
 test('HTTP workflow rejects files larger than 10 MB', async () => {
@@ -262,6 +355,7 @@ test('HTTP workflow bulk-delete rejects invalid ID payloads', async () => {
 test('HTTP workflow enforces the upload rate limit', async () => {
   const authenticatedCookie = await login();
   let limitedResponse: Response | undefined;
+  let successfulRequests = 0;
 
   for (let attempt = 0; attempt < 21; attempt += 1) {
     const response = await uploadImageRequest(authenticatedCookie, `rate-limit-${attempt}.png`);
@@ -270,9 +364,11 @@ test('HTTP workflow enforces the upload rate limit', async () => {
       break;
     }
     assert.equal(response.status, 201);
+    successfulRequests += 1;
   }
 
   assert.ok(limitedResponse, 'Expected the upload rate limit to reject a request');
+  assert.ok(successfulRequests > 0, 'Expected some uploads to remain below the shared test limit');
   assert.equal(limitedResponse.status, 429);
   assert.deepEqual(await limitedResponse.json(), {
     error: 'Upload limit reached, please try again later.',
@@ -301,16 +397,50 @@ async function login(): Promise<string> {
   return readSessionCookie(response);
 }
 
+async function registerUser(username: string, inviteCode: string): Promise<Response> {
+  const initialSession = await createSession();
+  const token = await getCsrfToken(initialSession.cookie);
+  return fetch(`${baseUrl}/api/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: initialSession.cookie,
+      'x-csrf-token': token,
+    },
+    body: JSON.stringify({ username, password: 'voter-password-123', inviteCode }),
+  });
+}
+
+async function registerAndGetCookie(username: string): Promise<string> {
+  const response = await registerUser(username, 'workflow-invite-code');
+  assert.equal(response.status, 201);
+  return readSessionCookie(response);
+}
+
+async function submitVote(cookie: string, itemId: number, choice: string): Promise<Response> {
+  const token = await getCsrfToken(cookie);
+  return fetch(`${baseUrl}/api/items/${itemId}/choices`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: cookie,
+      'x-csrf-token': token,
+    },
+    body: JSON.stringify({ choice }),
+  });
+}
+
 async function uploadImage(
   cookie: string,
-  originalName: string
+  originalName: string,
+  requiredVotes = 2
 ): Promise<{ id: number; filename: string; original_name: string }> {
-  const response = await uploadImageRequest(cookie, originalName);
+  const response = await uploadImageRequest(cookie, originalName, requiredVotes);
   assert.equal(response.status, 201);
   return await response.json() as { id: number; filename: string; original_name: string };
 }
 
-async function uploadImageRequest(cookie: string, originalName: string): Promise<Response> {
+async function uploadImageRequest(cookie: string, originalName: string, requiredVotes = 2): Promise<Response> {
   const token = await getCsrfToken(cookie);
   const formData = new FormData();
   formData.append(
@@ -318,6 +448,7 @@ async function uploadImageRequest(cookie: string, originalName: string): Promise
     new Blob(['image-content'], { type: 'image/png' }),
     originalName
   );
+  formData.append('requiredVotes', String(requiredVotes));
 
   return fetch(`${baseUrl}/api/items`, {
     method: 'POST',
