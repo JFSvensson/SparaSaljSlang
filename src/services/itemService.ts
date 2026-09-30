@@ -24,6 +24,7 @@ export interface ItemSummary {
   voter_count: number;
   sell_voter_count: number;
   sell_ready: boolean;
+  voting_round: number;
 }
 
 export interface DecisionSummary {
@@ -46,14 +47,15 @@ export interface ItemRepository {
   getAll(): ItemWithChoices[];
   getById(id: number): Item | undefined;
   delete(id: number): void;
+  startNewVotingRound(id: number): void;
 }
 
 export interface ChoiceRepository {
-  create(itemId: number, choice: 'save' | 'sell' | 'throw', voterId: string): Choice;
-  getByItemId(itemId: number): Choice[];
-  getCounts(itemId: number): { save: number; sell: number; throw: number };
-  getVoterStats(itemId: number): { voter_count: number; sell_voter_count: number };
-  getChoiceByVoter(itemId: number, voterId: string): Choice | undefined;
+  create(itemId: number, choice: 'save' | 'sell' | 'throw', voterId: string, votingRound: number): Choice;
+  getByItemId(itemId: number, votingRound: number): Choice[];
+  getCounts(itemId: number, votingRound: number): { save: number; sell: number; throw: number };
+  getVoterStats(itemId: number, votingRound: number): { voter_count: number; sell_voter_count: number };
+  getChoiceByVoter(itemId: number, voterId: string, votingRound: number): Choice | undefined;
 }
 
 export interface ListingDraftRepository {
@@ -150,13 +152,16 @@ export class ItemService {
       return null;
     }
 
-    const counts = this.choiceRepository.getCounts(id);
-    const voterStats = this.choiceRepository.getVoterStats(id);
+    const counts = this.choiceRepository.getCounts(id, item.voting_round);
+    const voterStats = this.choiceRepository.getVoterStats(id, item.voting_round);
     return {
       ...item,
       ...counts,
       ...voterStats,
-      my_choice: voterId ? this.choiceRepository.getChoiceByVoter(id, voterId)?.choice ?? null : null,
+      my_choice: voterId
+        ? this.choiceRepository.getChoiceByVoter(id, voterId, item.voting_round)?.choice ?? null
+        : null,
+      voting_round: item.voting_round,
       sell_ready: item.sell_direct === 1
         || (voterStats.voter_count >= item.required_votes && voterStats.sell_voter_count === item.required_votes),
     };
@@ -213,8 +218,9 @@ export class ItemService {
     }
 
     return {
-      choices: this.choiceRepository.getByItemId(id).map(({ voter_id: _voterId, ...choice }) => choice),
-      counts: this.choiceRepository.getCounts(id),
+      choices: this.choiceRepository.getByItemId(id, item.voting_round)
+        .map(({ voter_id: _voterId, ...choice }) => choice),
+      counts: this.choiceRepository.getCounts(id, item.voting_round),
     };
   }
 
@@ -224,24 +230,27 @@ export class ItemService {
       return null;
     }
 
-    const voterStats = this.choiceRepository.getVoterStats(id);
-    const existingChoice = this.choiceRepository.getChoiceByVoter(id, voterId);
+    const voterStats = this.choiceRepository.getVoterStats(id, item.voting_round);
+    const existingChoice = this.choiceRepository.getChoiceByVoter(id, voterId, item.voting_round);
     if (existingChoice) {
       return {
         status: 'already-voted',
         choice: existingChoice,
-        counts: this.choiceRepository.getCounts(id),
+        counts: this.choiceRepository.getCounts(id, item.voting_round),
         ...voterStats,
         required_votes: item.required_votes,
       };
     }
     if (item.sell_direct === 1 || voterStats.voter_count >= item.required_votes) {
-      return { status: 'voting-closed', counts: this.choiceRepository.getCounts(id) };
+      return {
+        status: 'voting-closed',
+        counts: this.choiceRepository.getCounts(id, item.voting_round),
+      };
     }
 
-    const saved = this.choiceRepository.create(id, choice, voterId);
-    const counts = this.choiceRepository.getCounts(id);
-    const updatedStats = this.choiceRepository.getVoterStats(id);
+    const saved = this.choiceRepository.create(id, choice, voterId, item.voting_round);
+    const counts = this.choiceRepository.getCounts(id, item.voting_round);
+    const updatedStats = this.choiceRepository.getVoterStats(id, item.voting_round);
     return {
       status: 'submitted',
       choice: saved,
@@ -267,5 +276,20 @@ export class ItemService {
       return null;
     }
     return { item: this.getItem(id), listing_draft: listingDraft };
+  }
+
+  resetVoting(id: number) {
+    const item = this.itemRepository.getById(id);
+    if (!item) {
+      return null;
+    }
+    const voterStats = this.choiceRepository.getVoterStats(id, item.voting_round);
+    const sellReady = voterStats.voter_count >= item.required_votes
+      && voterStats.sell_voter_count === item.required_votes;
+    if (item.sell_direct === 1 || voterStats.voter_count < item.required_votes || sellReady) {
+      return { reset: false as const, item: this.getItem(id) };
+    }
+    this.itemRepository.startNewVotingRound(id);
+    return { reset: true as const, item: this.getItem(id) };
   }
 }

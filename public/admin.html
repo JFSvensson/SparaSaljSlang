@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SparaSäljSläng &mdash; Kontohantering</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-brand">
+      <h1>🗃️ Spara, sälj eller släng?</h1>
+      <span class="header-pill">Kontohantering</span>
+    </div>
+    <nav>
+      <a href="index.html">Bedöm föremål</a>
+      <a href="list.html">Alla föremål</a>
+      <a href="listings.html">Annonsutkast</a>
+      <a href="admin.html" class="active">Konton</a>
+      <a href="upload.html">Ladda upp föremål</a>
+      <button id="logout-btn" class="nav-btn" type="button">Logga ut</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Väljarkonton</h2>
+      <p class="login-help">Återkallade konton förlorar omedelbart åtkomst, även vid aktiva inloggningar. Tidigare röster finns kvar.</p>
+      <p id="voters-status" class="status-msg" aria-live="polite"></p>
+      <div id="voters-list" class="voters-list"></div>
+    </section>
+
+    <section class="card">
+      <h2>Inbjudningskod</h2>
+      <p id="registration-state" class="login-help"></p>
+      <div class="admin-actions">
+        <button id="rotate-invite" class="btn btn-upload" type="button">Skapa ny inbjudningskod</button>
+        <button id="disable-registration" class="btn btn-throw" type="button">Stäng av registrering</button>
+      </div>
+      <label id="new-invite-wrap" class="form-field hidden" for="new-invite-code">
+        Ny kod – kopiera och dela säkert. Den visas inte igen.
+        <input id="new-invite-code" type="text" readonly />
+      </label>
+      <button id="copy-invite" class="btn hidden" type="button">Kopiera kod</button>
+      <p id="invite-status" class="status-msg" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <div id="revoke-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="revoke-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content card">
+      <button id="revoke-close" class="modal-close" aria-label="Stäng" type="button">✕</button>
+      <h3 id="revoke-title">Återkalla väljarkonto?</h3>
+      <p id="revoke-message" class="login-help"></p>
+      <p id="revoke-status" class="status-msg" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button id="revoke-cancel" class="btn" type="button">Avbryt</button>
+        <button id="revoke-confirm" class="btn btn-throw" type="button">Återkalla konto</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="client.js"></script>
+  <script src="ui.js"></script>
+  <script src="components.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

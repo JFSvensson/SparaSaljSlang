@@ -8,6 +8,7 @@ import { config } from '../config';
 import { listingDraftsDb } from '../db';
 import {
   isAllowedChoice,
+  isAllowedListingCondition,
   isAllowedImageMimeType,
   isAllowedMarketplace,
   normalizeOriginalName,
@@ -231,23 +232,41 @@ router.post('/:id/sell-direct', listingDraftLimiter, (req: Request, res: Respons
   res.json(item);
 });
 
+router.post('/:id/reset-votes', requireAdministrator, (req: Request, res: Response) => {
+  const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parsePositiveInt(idParam);
+  if (id === null) {
+    throw new HttpError(400, 'Invalid id');
+  }
+  const result = itemService.resetVoting(id);
+  if (!result) {
+    throw new HttpError(404, 'Item not found');
+  }
+  if (!result.reset) {
+    throw new HttpError(409, 'Endast avslutade omröstningar utan enhälligt Sälj kan nollställas.');
+  }
+  res.json(result.item);
+});
+
 router.patch('/listings/:id', (req: Request, res: Response) => {
   const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parsePositiveInt(idParam);
   if (id === null) {
     throw new HttpError(400, 'Invalid listing draft id');
   }
-  const { title, description, price, marketplace } = req.body as {
+  const { title, description, price, condition, marketplace, marketplaceName } = req.body as {
     title?: unknown;
     description?: unknown;
     price?: unknown;
+    condition?: unknown;
     marketplace?: unknown;
+    marketplaceName?: unknown;
   };
   if (typeof title !== 'string' || !title.trim() || title.trim().length > 120) {
     throw new HttpError(400, 'Titeln måste innehålla 1–120 tecken.');
   }
-  if (typeof description !== 'string' || description.trim().length > 4000) {
-    throw new HttpError(400, 'Beskrivningen får vara högst 4000 tecken.');
+  if (typeof description !== 'string' || !description.trim() || description.trim().length > 4000) {
+    throw new HttpError(400, 'Beskrivningen måste innehålla 1–4000 tecken.');
   }
   const parsedPrice = typeof price === 'number' && Number.isInteger(price) ? price : Number.NaN;
   if (parsedPrice < 1 || parsedPrice > 1_000_000) {
@@ -256,11 +275,28 @@ router.patch('/listings/:id', (req: Request, res: Response) => {
   if (!isAllowedMarketplace(marketplace)) {
     throw new HttpError(400, 'Välj Blocket, Tradera eller Annan marknadsplats.');
   }
+  if (!isAllowedListingCondition(condition)) {
+    throw new HttpError(400, 'Välj ett giltigt skick för föremålet.');
+  }
+  if (
+    marketplace === 'other'
+    && (typeof marketplaceName !== 'string' || !marketplaceName.trim() || marketplaceName.trim().length > 80)
+  ) {
+    throw new HttpError(400, 'Ange namnet på den andra marknadsplatsen (1–80 tecken).');
+  }
+  if (marketplace !== 'other' && marketplaceName !== undefined && typeof marketplaceName !== 'string') {
+    throw new HttpError(400, 'Ogiltigt marknadsplatsnamn.');
+  }
+  const normalizedMarketplaceName = marketplace === 'other' && typeof marketplaceName === 'string'
+    ? marketplaceName.trim()
+    : '';
   const draft = listingDraftsDb.update(id, {
     title: title.trim(),
     description: description.trim(),
     price: parsedPrice,
+    condition,
     marketplace,
+    marketplace_name: normalizedMarketplaceName,
   });
   if (!draft) {
     throw new HttpError(404, 'Annonsutkastet hittades inte.');

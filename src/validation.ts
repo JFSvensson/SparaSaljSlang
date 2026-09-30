@@ -47,3 +47,9 @@ export function isValidPassword(value: unknown): value is string {
 export function isAllowedMarketplace(value: unknown): value is 'blocket' | 'tradera' | 'other' {
   return value === 'blocket' || value === 'tradera' || value === 'other';
 }
+
+const listingConditions = ['new', 'very_good', 'good', 'used', 'needs_repair'] as const;
+
+export function isAllowedListingCondition(value: unknown): value is (typeof listingConditions)[number] {
+  return typeof value === 'string' && (listingConditions as readonly string[]).includes(value);
+}

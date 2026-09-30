@@ -16,6 +16,7 @@
       <a href="index.html">Bedöm föremål</a>
       <a href="list.html" class="active">Alla föremål</a>
       <a href="listings.html">Annonsutkast</a>
+      <a href="admin.html" class="admin-only hidden">Konton</a>
       <a href="upload.html">Ladda upp föremål</a>
       <button id="logout-btn" class="nav-btn">Logga ut</button>
     </nav>
@@ -82,6 +83,7 @@
       <p class="modal-verdict" id="modal-verdict"></p>
       <p class="vote-progress" id="modal-vote-progress"></p>
       <div class="modal-actions">
+        <button id="modal-reset-votes" class="btn btn-upload hidden" type="button">Nollställ röster och öppna igen</button>
         <button id="modal-delete" class="btn btn-throw">🗑️ Ta bort föremål</button>
       </div>
     </div>

@@ -7,15 +7,19 @@ import itemsRouter from './routes/items';
 import { config, validateConfig } from './config';
 import { authenticateUser, createPasswordHash, verifyPassword } from './auth';
 import { closeDatabase, isDatabaseAvailable, votersDb } from './db';
+import { registrationSettingsDb } from './db';
 import { isValidPassword, isValidUsername } from './validation';
 import { toPublicError } from './errors';
 import { SqliteSessionStore } from './sessionStore';
 import { csrfSynchronisedProtection, generateToken } from './csrf';
 import { closeResources } from './shutdown';
 import { createLogger } from './logger';
-import { timingSafeEqual } from 'crypto';
+import { randomBytes } from 'crypto';
 
 validateConfig();
+registrationSettingsDb.initialize(
+  config.registrationInviteCode ? createPasswordHash(config.registrationInviteCode) : null
+);
 const app = express();
 const PORT = config.port;
 const sessionCookieName = 'sparasaljslang.sid';
@@ -35,6 +39,7 @@ app.use((req, res, next) => {
     return next();
   }
 
+  res.set('Cache-Control', 'no-store');
   const startedAt = Date.now();
   res.on('finish', () => {
     logger.info('http_request', {
@@ -65,7 +70,14 @@ app.use(session({
 }));
 
 function isAuthenticated(req: express.Request): boolean {
-  return req.session.isAuthenticated === true && typeof req.session.voterId === 'string';
+  if (req.session.isAuthenticated !== true || typeof req.session.voterId !== 'string') {
+    return false;
+  }
+  if (req.session.voterId.startsWith('admin:')) {
+    return req.session.isAdministrator === true
+      && req.session.voterId === `admin:${config.loginUsername.toLocaleLowerCase('en-US')}`;
+  }
+  return req.session.isAdministrator === false && Boolean(votersDb.getById(req.session.voterId));
 }
 
 // Rate limiting for API routes (protects file-system access)
@@ -85,6 +97,8 @@ app.use((req, res, next) => {
     pathname === '/login.html' ||
     pathname === '/register' ||
     pathname === '/register.html' ||
+    pathname === '/admin' ||
+    pathname === '/admin.html' ||
     pathname === '/api/login' ||
     pathname === '/api/register' ||
     pathname === '/api/auth-options' ||
@@ -121,7 +135,7 @@ app.get('/api/csrf-token', (req, res) => {
 });
 
 app.get('/api/auth-options', (_req, res) => {
-  res.json({ registration_enabled: Boolean(config.registrationInviteCode) });
+  res.json({ registration_enabled: Boolean(registrationSettingsDb.getInviteCodeHash()) });
 });
 
 app.use(csrfSynchronisedProtection);
@@ -176,12 +190,13 @@ app.post('/api/register', registrationLimiter, async (req, res) => {
     password?: unknown;
     inviteCode?: unknown;
   };
-  if (!config.registrationInviteCode) {
+  const inviteCodeHash = registrationSettingsDb.getInviteCodeHash();
+  if (!inviteCodeHash) {
     return res.status(503).json({ error: 'Registrering är inte aktiverad.' });
   }
   if (
     typeof inviteCode !== 'string'
-    || !constantTimeStringEqual(inviteCode, config.registrationInviteCode)
+    || !await verifyPassword(inviteCode, inviteCodeHash)
   ) {
     return res.status(403).json({ error: 'Ogiltig inbjudningskod.' });
   }
@@ -217,6 +232,40 @@ app.post('/api/register', registrationLimiter, async (req, res) => {
 
 app.get('/api/session', (req, res) => {
   res.json({ is_administrator: req.session.isAdministrator === true });
+});
+
+function requireAdministrator(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  if (!isAuthenticated(req) || req.session.isAdministrator !== true) {
+    res.status(403).json({ error: 'Endast administratören får hantera väljarkonton och registrering.' });
+    return;
+  }
+  next();
+}
+
+app.get('/api/admin/voters', requireAdministrator, (_req, res) => {
+  res.json(votersDb.getAll());
+});
+
+app.delete('/api/admin/voters/:id', requireAdministrator, (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  if (!id || id.length > 64) {
+    return res.status(400).json({ error: 'Ogiltigt väljarkonto.' });
+  }
+  if (!votersDb.delete(id)) {
+    return res.status(404).json({ error: 'Väljarkontot hittades inte.' });
+  }
+  return res.json({ ok: true });
+});
+
+app.post('/api/admin/registration-invite/rotate', requireAdministrator, (req, res) => {
+  const inviteCode = randomBytes(24).toString('base64url');
+  registrationSettingsDb.rotateInviteCode(createPasswordHash(inviteCode));
+  res.json({ invite_code: inviteCode });
+});
+
+app.post('/api/admin/registration-invite/disable', requireAdministrator, (_req, res) => {
+  registrationSettingsDb.disableRegistration();
+  res.json({ registration_enabled: false });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -261,12 +310,6 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   }
   res.status(publicError.status).json(publicError.body);
 });
-
-function constantTimeStringEqual(first: string, second: string): boolean {
-  const firstBuffer = Buffer.from(first);
-  const secondBuffer = Buffer.from(second);
-  return firstBuffer.length === secondBuffer.length && timingSafeEqual(firstBuffer, secondBuffer);
-}
 
 const server = app.listen(PORT, () => {
   logger.info('server_started', { port: PORT });

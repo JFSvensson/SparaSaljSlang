@@ -23,6 +23,7 @@
   const modalVerdict = document.getElementById('modal-verdict');
   const modalVoteProgress = document.getElementById('modal-vote-progress');
   const modalDelete = document.getElementById('modal-delete');
+  const modalResetVotes = document.getElementById('modal-reset-votes');
   const modalBarSave = document.getElementById('modal-bar-save');
   const modalBarSell = document.getElementById('modal-bar-sell');
   const modalBarThrow = document.getElementById('modal-bar-throw');
@@ -155,6 +156,13 @@
     }
     if (modalName) modalName.textContent = item.original_name;
     updateModalBars(item.save_count, item.sell_count, item.throw_count, item);
+    if (modalResetVotes) {
+      const resetAllowed = canManageItems
+        && item.voter_count >= item.required_votes
+        && !item.sell_ready
+        && item.sell_direct !== 1;
+      modalResetVotes.classList.toggle('hidden', !resetAllowed);
+    }
     modalController?.open();
   }
 
@@ -230,6 +238,24 @@
         loadItems();
       } catch (err) {
         setStatus(String(err), 'error');
+      }
+    });
+  }
+
+  if (modalResetVotes) {
+    modalResetVotes.addEventListener('click', async () => {
+      if (currentItemId === -1) return;
+      if (!confirm('Nollställa den avslutade omröstningen och öppna den igen? Den tidigare rösthistoriken sparas men räknas inte i den nya rundan.')) return;
+      modalResetVotes.disabled = true;
+      try {
+        await api.post('/items/' + currentItemId + '/reset-votes', {});
+        closeModal();
+        setStatus('Omröstningen öppnades igen. Tidigare röster finns kvar i historiken.', 'success');
+        await loadItems();
+      } catch (error) {
+        setStatus(String(error), 'error');
+      } finally {
+        modalResetVotes.disabled = false;
       }
     });
   }
@@ -319,6 +345,9 @@
     try {
       const session = await api.get('/session');
       canManageItems = session.is_administrator;
+      document.querySelectorAll('.admin-only').forEach((link) => {
+        link.classList.toggle('hidden', !canManageItems);
+      });
       if (modalDelete) modalDelete.classList.toggle('hidden', !canManageItems);
       if (bulkDeleteOpen) bulkDeleteOpen.classList.toggle('hidden', !canManageItems);
       const uploadLink = document.querySelector('nav a[href="upload.html"]');

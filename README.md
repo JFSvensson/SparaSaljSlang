@@ -55,10 +55,18 @@ npm run hash-password -- "ditt-losenord"
 
 Sätt sedan `NODE_ENV=production` och konfigurera `LOGIN_USERNAME`, `LOGIN_PASSWORD_HASH` och `SESSION_SECRET`. Appen vägrar att starta i produktion om någon av dem saknas. `LOGIN_PASSWORD` används endast som lokal utvecklingsfallback och ska inte sättas i produktion. Sätt dessutom `REGISTRATION_INVITE_CODE` till en separat, lång slumpad kod för att tillåta nya väljarkonton; utan den är registreringen avstängd. Koden är gemensam och återanvändbar, så dela den endast med personer som ska kunna rösta.
 
+`REGISTRATION_INVITE_CODE` används endast för att initiera koden första gången databasen skapas. Administratören hanterar därefter koden från sidan **Konton**: en rotering stänger omedelbart den gamla koden och visar den nya endast en gång. Registrering kan också stängas av från samma sida. Endast en env-kodshash lagras i SQLite; själva koden visas aldrig igen efter roteringen.
+
 ### Röster och annonsutkast
 Varje föremål får ett krav på 1–50 väljare (standard 2). Varje konto kan rösta en gång per föremål. När antalet röster nås avslutas omröstningen; annonsutkast skapas automatiskt bara om samtliga röster är Sälj. En användare kan också välja **Sälj direkt**, vilket hoppar över omröstningen och skapar ett utkast direkt. Väljarkonton kan rösta och hantera annonsutkast; endast administratörskontot kan ladda upp och ta bort föremål.
 
-Utkast får rubriken från bildens filnamn. Fyll i beskrivning, pris och avsedd marknadsplats under **Annonsutkast**. Utkast sparas lokalt och måste granskas och publiceras manuellt. Appen ansluter inte till Blocket eller Tradera, hanterar inte deras konton och sparar inga marknadsplatslösenord. Tidigare röster som saknar kontoidentitet finns kvar i röststatistiken, men räknas inte mot de nya väljarkraven.
+Administratörens **Konton**-sida listar väljarkonton och tillåter omedelbar återkallelse. Återkallade användare blockeras även om en session redan var inloggad; tidigare röster och deras räkning lämnas oförändrade.
+
+Utkast får rubriken från bildens filnamn. Fyll i rubrik, beskrivning, pris, skick och avsedd marknadsplats under **Annonsutkast**. Annan marknadsplats kräver också ett namn. Status visar när ett utkast är komplett; då kan annonstexten kopieras för manuell publicering. Utkast publiceras inte automatiskt. Appen ansluter inte till Blocket eller Tradera, hanterar inte deras konton och sparar inga marknadsplatslösenord. Tidigare röster som saknar kontoidentitet finns kvar i röststatistiken, men räknas inte mot de nya väljarkraven.
+
+När röstkravet är nått utan enhälligt Sälj kan administratören välja **Nollställ röster och öppna igen** i föremålets detaljvy. Den tidigare rundans röster bevaras i databasen, men en ny runda börjar med tom räkning och alla väljare får rösta igen. Funktionen är inte tillgänglig för öppna omröstningar, godkänt Sälj eller Sälj direkt.
+
+En första integrationsförstudie finns i [PLAN.md](./PLAN.md). Kortfattat kräver Blockets Pro Import API en scope-behörig JWT från deras support, och Traderas officiella REST API kräver en registrerad utvecklarapp samt användarautentisering. Tillgång, villkor och testflöden behöver bekräftas för det faktiska säljarkontot innan en koppling byggs.
 
 ## VPS med Docker
 1. Installera Docker Engine med Docker Compose på VPS:en.

@@ -164,6 +164,9 @@
     try {
       const session = await api.get('/session');
       canManageItems = session.is_administrator;
+      document.querySelectorAll('.admin-only').forEach((link) => {
+        link.classList.toggle('hidden', !canManageItems);
+      });
       if (deleteCurrentBtn) deleteCurrentBtn.classList.toggle('hidden', !canManageItems);
       const uploadLink = document.querySelector('nav a[href="upload.html"]');
       if (uploadLink) uploadLink.classList.toggle('hidden', !canManageItems);

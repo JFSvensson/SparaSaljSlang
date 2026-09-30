@@ -38,6 +38,23 @@
     description.rows = 5;
     description.value = draft.description;
 
+    const condition = document.createElement('select');
+    [
+      ['', 'Välj skick'],
+      ['new', 'Ny'],
+      ['very_good', 'Mycket gott skick'],
+      ['good', 'Gott skick'],
+      ['used', 'Använt skick'],
+      ['needs_repair', 'Renoverings-/reparationsbehov'],
+    ].forEach(([value, label]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      condition.appendChild(option);
+    });
+    condition.value = draft.condition;
+    condition.required = true;
+
     const price = document.createElement('input');
     price.type = 'number';
     price.min = '1';
@@ -59,10 +76,40 @@
     });
     marketplace.value = draft.marketplace;
 
+    const otherMarketplace = document.createElement('input');
+    otherMarketplace.type = 'text';
+    otherMarketplace.maxLength = 80;
+    otherMarketplace.value = draft.marketplace_name;
+    otherMarketplace.placeholder = 'Ange marknadsplatsens namn';
+    otherMarketplace.required = marketplace.value === 'other';
+    otherMarketplace.classList.toggle('hidden', !otherMarketplace.required);
+    marketplace.addEventListener('change', () => {
+      otherMarketplace.required = marketplace.value === 'other';
+      otherMarketplace.classList.toggle('hidden', !otherMarketplace.required);
+    });
+
+    const completeness = document.createElement('p');
+    completeness.className = 'listing-completeness';
+    completeness.setAttribute('aria-live', 'polite');
+    const updateCompleteness = (isComplete) => {
+      completeness.classList.toggle('is-complete', isComplete);
+      completeness.classList.toggle('is-incomplete', !isComplete);
+      completeness.textContent = isComplete
+        ? 'Utkastet är komplett och klart att kopiera för manuell publicering.'
+        : 'Utkastet är ofullständigt. Fyll i rubrik, beskrivning, pris, skick och marknadsplats.';
+    };
+    updateCompleteness(draft.is_complete);
+
     const submit = document.createElement('button');
     submit.className = 'btn btn-upload';
     submit.type = 'submit';
     submit.textContent = 'Spara utkast';
+
+    const copyButton = document.createElement('button');
+    copyButton.className = 'btn';
+    copyButton.type = 'button';
+    copyButton.textContent = 'Kopiera annonstext';
+    copyButton.disabled = !draft.is_complete;
 
     const feedback = document.createElement('p');
     feedback.className = 'status-msg';
@@ -71,22 +118,49 @@
       image,
       createField('Rubrik', title),
       createField('Beskrivning', description),
+      createField('Skick', condition),
       createField('Pris i kronor', price),
       createField('Avsedd marknadsplats', marketplace),
+      createField('Annan marknadsplats', otherMarketplace),
+      completeness,
       submit,
+      copyButton,
       feedback
     );
+    copyButton.addEventListener('click', async () => {
+      const marketplaceLabel = marketplace.value === 'other'
+        ? otherMarketplace.value.trim()
+        : marketplace.options[marketplace.selectedIndex].textContent;
+      const listingText = [
+        title.value.trim(),
+        `Pris: ${Number(price.value)} kr`,
+        `Skick: ${condition.options[condition.selectedIndex].textContent}`,
+        `Marknadsplats: ${marketplaceLabel}`,
+        '',
+        description.value.trim(),
+      ].join('\n');
+      try {
+        await navigator.clipboard.writeText(listingText);
+        window.__ui.setStatus(feedback, 'Annonstexten kopierades.', 'success');
+      } catch (error) {
+        window.__ui.setStatus(feedback, `Kunde inte kopiera automatiskt: ${String(error)}.`, 'error');
+      }
+    });
     card.addEventListener('submit', async (event) => {
       event.preventDefault();
       submit.disabled = true;
       window.__ui.setStatus(feedback, 'Sparar utkast...');
       try {
-        await api.patch('/items/listings/' + draft.id, {
+        const savedDraft = await api.patch('/items/listings/' + draft.id, {
           title: title.value,
           description: description.value,
           price: Number(price.value),
+          condition: condition.value,
           marketplace: marketplace.value,
+          marketplaceName: otherMarketplace.value,
         });
+        updateCompleteness(savedDraft.is_complete);
+        copyButton.disabled = !savedDraft.is_complete;
         window.__ui.setStatus(feedback, 'Utkastet är sparat. Publicera det manuellt på marknadsplatsen.', 'success');
       } catch (error) {
         window.__ui.setStatus(feedback, String(error), 'error');
@@ -100,6 +174,9 @@
   async function loadDrafts() {
     try {
       const session = await api.get('/session');
+      document.querySelectorAll('.admin-only').forEach((link) => {
+        link.classList.toggle('hidden', !session.is_administrator);
+      });
       const uploadLink = document.querySelector('nav a[href="upload.html"]');
       if (uploadLink) uploadLink.classList.toggle('hidden', !session.is_administrator);
       const drafts = await api.get('/items/listings');

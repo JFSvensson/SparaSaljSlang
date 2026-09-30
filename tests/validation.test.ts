@@ -4,6 +4,7 @@ import {
   parsePositiveInt,
   isAllowedChoice,
   isAllowedImageMimeType,
+  isAllowedListingCondition,
   isAllowedMarketplace,
   isValidPassword,
   isValidUsername,
@@ -67,4 +68,10 @@ test('marketplace validation accepts only supported options', () => {
   assert.equal(isAllowedMarketplace('tradera'), true);
   assert.equal(isAllowedMarketplace('other'), true);
   assert.equal(isAllowedMarketplace('unknown'), false);
+});
+
+test('listing condition validation accepts supported item conditions', () => {
+  assert.equal(isAllowedListingCondition('new'), true);
+  assert.equal(isAllowedListingCondition('needs_repair'), true);
+  assert.equal(isAllowedListingCondition('unknown'), false);
 });

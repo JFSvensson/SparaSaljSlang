@@ -17,16 +17,18 @@ const item: Item = {
   created_at: '2026-07-31 12:00:00',
   required_votes: 2,
   sell_direct: 0,
+  voting_round: 1,
 };
 
 function createItemRepository(currentItem: Item | undefined = item): ItemRepository {
+  let activeItem = currentItem;
   return {
     create(filename, originalName) {
       return { ...item, filename, original_name: originalName };
     },
     getAll() {
-      return currentItem ? [{
-        ...currentItem,
+      return activeItem ? [{
+        ...activeItem,
         save_count: 0,
         sell_count: 0,
         throw_count: 0,
@@ -35,16 +37,28 @@ function createItemRepository(currentItem: Item | undefined = item): ItemReposit
       }] : [];
     },
     getById(id) {
-      return currentItem?.id === id ? currentItem : undefined;
+      return activeItem?.id === id ? activeItem : undefined;
     },
     delete() {},
+    startNewVotingRound(id) {
+      if (activeItem?.id === id) {
+        activeItem = { ...activeItem, voting_round: activeItem.voting_round + 1 };
+      }
+    },
   };
 }
 
 function createChoiceRepository(counts = { save: 0, sell: 0, throw: 0 }): ChoiceRepository {
   return {
-    create(itemId, choice, voterId) {
-      return { id: 1, item_id: itemId, choice, voter_id: voterId, created_at: '2026-07-31 12:00:00' };
+    create(itemId, choice, voterId, votingRound) {
+      return {
+        id: 1,
+        item_id: itemId,
+        choice,
+        voter_id: voterId,
+        voting_round: votingRound,
+        created_at: '2026-07-31 12:00:00',
+      };
     },
     getByItemId() {
       return [];
@@ -75,32 +89,37 @@ test('ItemService creates a draft only after the required distinct voters unanim
   const votes: Choice[] = [];
   const choiceRepository: ChoiceRepository = {
     ...createChoiceRepository(),
-    create(itemId, choice, voterId) {
+    create(itemId, choice, voterId, votingRound) {
       const saved = {
         id: votes.length + 1,
         item_id: itemId,
         choice,
         voter_id: voterId,
+        voting_round: votingRound,
         created_at: '2026-07-31 12:00:00',
       };
       votes.push(saved);
       return saved;
     },
-    getCounts() {
+    getCounts(_itemId, votingRound) {
       return {
-        save: votes.filter((vote) => vote.choice === 'save').length,
-        sell: votes.filter((vote) => vote.choice === 'sell').length,
-        throw: votes.filter((vote) => vote.choice === 'throw').length,
+        save: votes.filter((vote) => vote.voting_round === votingRound && vote.choice === 'save').length,
+        sell: votes.filter((vote) => vote.voting_round === votingRound && vote.choice === 'sell').length,
+        throw: votes.filter((vote) => vote.voting_round === votingRound && vote.choice === 'throw').length,
       };
     },
-    getVoterStats() {
+    getVoterStats(_itemId, votingRound) {
       return {
-        voter_count: votes.length,
-        sell_voter_count: votes.filter((vote) => vote.choice === 'sell').length,
+        voter_count: votes.filter((vote) => vote.voting_round === votingRound).length,
+        sell_voter_count: votes.filter((vote) => vote.voting_round === votingRound && vote.choice === 'sell').length,
       };
     },
-    getChoiceByVoter(itemId, voterId) {
-      return votes.find((vote) => vote.item_id === itemId && vote.voter_id === voterId);
+    getChoiceByVoter(itemId, voterId, votingRound) {
+      return votes.find((vote) => (
+        vote.item_id === itemId
+        && vote.voter_id === voterId
+        && vote.voting_round === votingRound
+      ));
     },
   };
   const listingDraft: ListingDraft = {
@@ -109,10 +128,13 @@ test('ItemService creates a draft only after the required distinct voters unanim
     title: 'display-image',
     description: '',
     price: null,
+    condition: '',
     marketplace: 'other',
+    marketplace_name: '',
     created_at: '2026-07-31 12:00:00',
     filename: 'stored-image.png',
     original_name: 'display-image.png',
+    is_complete: false,
   };
   let draftsCreated = 0;
   const listingDraftRepository: ListingDraftRepository = {
@@ -141,6 +163,93 @@ test('ItemService creates a draft only after the required distinct voters unanim
   assert.equal(draftsCreated, 1);
   assert.equal(service.submitChoice(1, 'sell', 'voter-1')?.status, 'already-voted');
   assert.equal(service.submitChoice(1, 'sell', 'voter-3')?.status, 'voting-closed');
+});
+
+test('ItemService resets only a completed non-unanimous vote and retains previous rounds', () => {
+  let activeItem = { ...item, voting_round: 1 };
+  const itemRepository = createItemRepository(activeItem);
+  itemRepository.getById = (id) => id === activeItem.id ? activeItem : undefined;
+  itemRepository.startNewVotingRound = (id) => {
+    if (id === activeItem.id) {
+      activeItem = { ...activeItem, voting_round: activeItem.voting_round + 1 };
+    }
+  };
+  const votes: Choice[] = [
+    {
+      id: 1,
+      item_id: 1,
+      choice: 'sell',
+      voter_id: 'voter-1',
+      voting_round: 1,
+      created_at: '2026-07-31 12:00:00',
+    },
+    {
+      id: 2,
+      item_id: 1,
+      choice: 'save',
+      voter_id: 'voter-2',
+      voting_round: 1,
+      created_at: '2026-07-31 12:01:00',
+    },
+  ];
+  const choiceRepository: ChoiceRepository = {
+    create(itemId, choice, voterId, votingRound) {
+      const saved = {
+        id: votes.length + 1,
+        item_id: itemId,
+        choice,
+        voter_id: voterId,
+        voting_round: votingRound,
+        created_at: '2026-07-31 12:02:00',
+      };
+      votes.push(saved);
+      return saved;
+    },
+    getByItemId(itemId, votingRound) {
+      return votes.filter((vote) => vote.item_id === itemId && vote.voting_round === votingRound);
+    },
+    getCounts(itemId, votingRound) {
+      const roundVotes = this.getByItemId(itemId, votingRound);
+      return {
+        save: roundVotes.filter((vote) => vote.choice === 'save').length,
+        sell: roundVotes.filter((vote) => vote.choice === 'sell').length,
+        throw: roundVotes.filter((vote) => vote.choice === 'throw').length,
+      };
+    },
+    getVoterStats(itemId, votingRound) {
+      const roundVotes = this.getByItemId(itemId, votingRound);
+      return {
+        voter_count: roundVotes.length,
+        sell_voter_count: roundVotes.filter((vote) => vote.choice === 'sell').length,
+      };
+    },
+    getChoiceByVoter(itemId, voterId, votingRound) {
+      return votes.find((vote) => (
+        vote.item_id === itemId
+        && vote.voter_id === voterId
+        && vote.voting_round === votingRound
+      ));
+    },
+  };
+  const service = new ItemService(
+    '/uploads',
+    itemRepository,
+    choiceRepository,
+    noFiles(),
+    { ensureForItem: () => undefined }
+  );
+
+  assert.equal(service.getItem(1)?.save, 1);
+  const resetResult = service.resetVoting(1);
+  assert.equal(resetResult?.reset, true);
+  assert.equal(resetResult?.item?.voting_round, 2);
+  assert.equal(resetResult?.item?.save, 0);
+  assert.equal(votes.length, 2);
+
+  const firstNewRoundVote = service.submitChoice(1, 'sell', 'voter-1');
+  assert.equal(firstNewRoundVote?.status, 'submitted');
+  assert.equal(firstNewRoundVote?.status === 'submitted' ? firstNewRoundVote.voter_count : undefined, 1);
+  assert.equal(votes.length, 3);
 });
 
 test('ItemService saves a choice and returns updated counts', () => {

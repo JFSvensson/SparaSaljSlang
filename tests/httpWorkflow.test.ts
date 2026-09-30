@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 const port = 4100 + Math.floor(Math.random() * 500);
@@ -219,12 +220,25 @@ test('HTTP workflow requires unique voters for unanimous sell and creates editab
 
   const authOptionsResponse = await fetch(`${baseUrl}/api/auth-options`);
   assert.deepEqual(await authOptionsResponse.json(), { registration_enabled: true });
+  assert.equal(authOptionsResponse.headers.get('cache-control'), 'no-store');
 
-  const invalidRegistration = await registerUser('invalid-voter', 'wrong-invite-code');
-  assert.equal(invalidRegistration.status, 403);
-
+  const adminToken = await getCsrfToken(adminCookie);
   const firstVoterCookie = await registerAndGetCookie('voter-one');
   const secondVoterCookie = await registerAndGetCookie('voter-two');
+  const deniedVoterListResponse = await fetch(`${baseUrl}/api/admin/voters`, {
+    headers: { Cookie: firstVoterCookie },
+  });
+  assert.equal(deniedVoterListResponse.status, 403);
+  const deniedRotationResponse = await fetch(`${baseUrl}/api/admin/registration-invite/rotate`, {
+    method: 'POST',
+    headers: { Cookie: firstVoterCookie, 'x-csrf-token': await getCsrfToken(firstVoterCookie) },
+  });
+  assert.equal(deniedRotationResponse.status, 403);
+  const voterListResponse = await fetch(`${baseUrl}/api/admin/voters`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(voterListResponse.status, 200);
+  assert.equal((await voterListResponse.json() as unknown[]).length, 2);
   const voterSessionResponse = await fetch(`${baseUrl}/api/session`, {
     headers: { Cookie: secondVoterCookie },
   });
@@ -252,6 +266,12 @@ test('HTTP workflow requires unique voters for unanimous sell and creates editab
   assert.equal(secondVote.sell_ready, true);
   assert.equal(secondVote.listing_draft.title, 'consensus-item');
 
+  const incompleteDraftResponse = await fetch(`${baseUrl}/api/items/listings`, {
+    headers: { Cookie: secondVoterCookie },
+  });
+  const incompleteDrafts = await incompleteDraftResponse.json() as { id: number; is_complete: boolean }[];
+  assert.equal(incompleteDrafts.find((draft) => draft.id === secondVote.listing_draft.id)?.is_complete, false);
+
   const updateToken = await getCsrfToken(secondVoterCookie);
   const updateResponse = await fetch(`${baseUrl}/api/items/listings/${secondVote.listing_draft.id}`, {
     method: 'PATCH',
@@ -264,14 +284,58 @@ test('HTTP workflow requires unique voters for unanimous sell and creates editab
       title: 'Välskött föremål',
       description: 'Fungerar bra och säljs i befintligt skick.',
       price: 250,
+      condition: 'very_good',
       marketplace: 'tradera',
     }),
   });
   assert.equal(updateResponse.status, 200);
-  const savedDraft = await updateResponse.json() as { title: string; price: number; marketplace: string };
+  const savedDraft = await updateResponse.json() as {
+    title: string;
+    price: number;
+    condition: string;
+    marketplace: string;
+    is_complete: boolean;
+  };
   assert.equal(savedDraft.title, 'Välskött föremål');
   assert.equal(savedDraft.price, 250);
+  assert.equal(savedDraft.condition, 'very_good');
   assert.equal(savedDraft.marketplace, 'tradera');
+  assert.equal(savedDraft.is_complete, true);
+
+  const invalidConditionResponse = await fetch(`${baseUrl}/api/items/listings/${secondVote.listing_draft.id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: secondVoterCookie,
+      'x-csrf-token': await getCsrfToken(secondVoterCookie),
+    },
+    body: JSON.stringify({
+      title: 'Välskött föremål',
+      description: 'Beskrivning',
+      price: 250,
+      condition: 'unknown',
+      marketplace: 'tradera',
+    }),
+  });
+  assert.equal(invalidConditionResponse.status, 400);
+
+  const missingOtherMarketplaceResponse = await fetch(`${baseUrl}/api/items/listings/${secondVote.listing_draft.id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: secondVoterCookie,
+      'x-csrf-token': await getCsrfToken(secondVoterCookie),
+    },
+    body: JSON.stringify({
+      title: 'Välskött föremål',
+      description: 'Beskrivning',
+      price: 250,
+      condition: 'good',
+      marketplace: 'other',
+      marketplaceName: '',
+    }),
+  });
+  assert.equal(missingOtherMarketplaceResponse.status, 400);
 
   const directItem = await uploadImage(adminCookie, 'direct-sale.png', 3);
   const directToken = await getCsrfToken(firstVoterCookie);
@@ -286,6 +350,120 @@ test('HTTP workflow requires unique voters for unanimous sell and creates editab
   };
   assert.equal(directResult.item.sell_direct, 1);
   assert.equal(directResult.listing_draft.title, 'direct-sale');
+
+  const mixedVoteItem = await uploadImage(adminCookie, 'mixed-votes.png', 2);
+  assert.equal((await submitVote(firstVoterCookie, mixedVoteItem.id, 'sell')).status, 201);
+  const nonSellVoteResponse = await submitVote(secondVoterCookie, mixedVoteItem.id, 'save');
+  assert.equal(nonSellVoteResponse.status, 201);
+  const nonSellVote = await nonSellVoteResponse.json() as {
+    sell_ready: boolean;
+    listing_draft?: unknown;
+  };
+  assert.equal(nonSellVote.sell_ready, false);
+  assert.equal(nonSellVote.listing_draft, undefined);
+  assert.equal((await submitVote(adminCookie, mixedVoteItem.id, 'sell')).status, 409);
+
+  const deniedResetResponse = await fetch(`${baseUrl}/api/items/${mixedVoteItem.id}/reset-votes`, {
+    method: 'POST',
+    headers: {
+      Cookie: firstVoterCookie,
+      'x-csrf-token': await getCsrfToken(firstVoterCookie),
+    },
+  });
+  assert.equal(deniedResetResponse.status, 403);
+  const resetResponse = await fetch(`${baseUrl}/api/items/${mixedVoteItem.id}/reset-votes`, {
+    method: 'POST',
+    headers: {
+      Cookie: adminCookie,
+      'x-csrf-token': await getCsrfToken(adminCookie),
+    },
+  });
+  assert.equal(resetResponse.status, 200);
+  const resetItem = await resetResponse.json() as {
+    voting_round: number;
+    voter_count: number;
+    save: number;
+    sell: number;
+    sell_ready: boolean;
+  };
+  assert.equal(resetItem.voting_round, 2);
+  assert.equal(resetItem.voter_count, 0);
+  assert.equal(resetItem.save, 0);
+  assert.equal(resetItem.sell, 0);
+  assert.equal(resetItem.sell_ready, false);
+  assert.equal((await submitVote(firstVoterCookie, mixedVoteItem.id, 'sell')).status, 201);
+  assert.equal((await submitVote(secondVoterCookie, mixedVoteItem.id, 'save')).status, 201);
+  const secondRoundChoicesResponse = await fetch(`${baseUrl}/api/items/${mixedVoteItem.id}/choices`, {
+    headers: { Cookie: adminCookie },
+  });
+  const secondRoundChoices = await secondRoundChoicesResponse.json() as {
+    choices: { voting_round: number }[];
+    counts: { save: number; sell: number; throw: number };
+  };
+  assert.equal(secondRoundChoicesResponse.status, 200);
+  assert.equal(secondRoundChoices.choices.length, 2);
+  assert.ok(secondRoundChoices.choices.every((choice) => choice.voting_round === 2));
+  assert.deepEqual(secondRoundChoices.counts, { save: 1, sell: 1, throw: 0 });
+  const votingDatabase = new Database(path.join(appRoot, 'data', 'sparasaljslang.db'), { readonly: true });
+  const roundHistory = votingDatabase.prepare(`
+    SELECT voting_round, COUNT(*) AS vote_count
+    FROM choices
+    WHERE item_id = ?
+    GROUP BY voting_round
+    ORDER BY voting_round
+  `).all(mixedVoteItem.id) as { voting_round: number; vote_count: number }[];
+  votingDatabase.close();
+  assert.deepEqual(roundHistory, [
+    { voting_round: 1, vote_count: 2 },
+    { voting_round: 2, vote_count: 2 },
+  ]);
+
+  const openItem = await uploadImage(adminCookie, 'open-vote.png', 2);
+  const deniedOpenReset = await fetch(`${baseUrl}/api/items/${openItem.id}/reset-votes`, {
+    method: 'POST',
+    headers: { Cookie: adminCookie, 'x-csrf-token': await getCsrfToken(adminCookie) },
+  });
+  assert.equal(deniedOpenReset.status, 409);
+
+  const directResetResponse = await fetch(`${baseUrl}/api/items/${directItem.id}/reset-votes`, {
+    method: 'POST',
+    headers: { Cookie: adminCookie, 'x-csrf-token': await getCsrfToken(adminCookie) },
+  });
+  assert.equal(directResetResponse.status, 409);
+
+  const rotateResponse = await fetch(`${baseUrl}/api/admin/registration-invite/rotate`, {
+    method: 'POST',
+    headers: { Cookie: adminCookie, 'x-csrf-token': adminToken },
+  });
+  assert.equal(rotateResponse.status, 200);
+  const rotatedCode = (await rotateResponse.json() as { invite_code: string }).invite_code;
+  assert.ok(rotatedCode);
+  assert.equal((await registerUser('old-code-voter', 'workflow-invite-code')).status, 403);
+  assert.equal((await registerUser('rotated-code-voter', rotatedCode)).status, 201);
+
+  const disableToken = await getCsrfToken(adminCookie);
+  const disableResponse = await fetch(`${baseUrl}/api/admin/registration-invite/disable`, {
+    method: 'POST',
+    headers: { Cookie: adminCookie, 'x-csrf-token': disableToken },
+  });
+  assert.deepEqual(await disableResponse.json(), { registration_enabled: false });
+  assert.equal((await registerUser('disabled-code-voter', rotatedCode)).status, 503);
+
+  const votersBeforeRevocationResponse = await fetch(`${baseUrl}/api/admin/voters`, {
+    headers: { Cookie: adminCookie },
+  });
+  const votersBeforeRevocation = await votersBeforeRevocationResponse.json() as { id: string; username: string }[];
+  const voterToRevoke = votersBeforeRevocation.find((voter) => voter.username === 'voter-one');
+  assert.ok(voterToRevoke);
+  const revokeResponse = await fetch(`${baseUrl}/api/admin/voters/${voterToRevoke.id}`, {
+    method: 'DELETE',
+    headers: { Cookie: adminCookie, 'x-csrf-token': await getCsrfToken(adminCookie) },
+  });
+  assert.equal(revokeResponse.status, 200);
+  const revokedSessionResponse = await fetch(`${baseUrl}/api/items`, {
+    headers: { Cookie: firstVoterCookie },
+  });
+  assert.equal(revokedSessionResponse.status, 401);
 });
 
 test('HTTP workflow rejects files larger than 10 MB', async () => {
