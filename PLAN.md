@@ -26,21 +26,23 @@
 
 ### Etapp 1 – Säker pilot med riktiga väljare
 **Mål:** Bekräfta att inbjudningar, röstregeln och utkasten fungerar för den tänkta gruppen innan externa marknadsplatskonton kopplas in.
-- Prova med ett litet antal användare och verkliga föremål.
-- Verifiera scenarierna: enhälligt Sälj, blandade röster, tröskel uppnådd utan Sälj, återanvänd röst och Sälj direkt.
-- Verifiera återkallelse och kodrotation med pilotgruppen, inklusive säker delning av den engångsvisade koden.
-- Verifiera med pilotgruppen att administratörens möjlighet att öppna en avslutad omröstning igen fungerar begripligt och säkert.
-- Prova det förbättrade annonsutkastet med pilotgruppen, inklusive kontroll att ofullständiga uppgifter stoppar kopiering.
+- **Förbered:** gör en färsk backup och välj en avgränsad pilotmiljö. Använd inte riktiga Blocket-/Tradera-inloggningar i appen; marknadsplatskoppling finns inte.
+- Bjud in ett litet antal deltagare med personliga väljarkonton och dela den engångsvisade inbjudningskoden via en separat säker kanal.
+- Prova separata föremål för enhälligt Sälj, blandade röster som når tröskeln, Spara/Släng och Sälj direkt. Bekräfta att en väljare inte kan rösta två gånger i samma runda.
+- Öppna en avslutad omröstning med blandade röster igen; kontrollera att den nya rundan börjar utan tidigare röstetal och att deltagarna kan rösta på nytt.
+- Prova återkallelse och kodrotation med en avgränsad testanvändare; kontrollera att en återkallad aktiv session blockeras.
+- Komplettera ett annonsutkast, kontrollera att ett ofullständigt utkast inte kan kopieras och kopiera en färdig annonstext för manuell granskning. Publicera inte testannonser automatiskt.
+- Samla in deltagarnas begriplighets- och användbarhetsfeedback, åtgärda blockerande problem och gör en ny backup efter piloten.
 **Klart när:** En pilotgrupp kan registrera sig, rösta en gång per föremål, förstå beslutet och färdigställa ett utkast utan administratörsingrepp.
 
 ### Etapp 2 – Verifiera marknadsplatsmöjligheter
 **Mål:** Välja integrationsväg utifrån vad Blocket och Tradera faktiskt stöder för denna typ av konto.
-- **Förstudie 2026-09-30:** Blockets officiella [Pro Import API](https://api.blocket.se/pro-import-api/docs/client-documentation) hanterar annonser via API, men kräver en JWT-token från Blockets kundsupport med dealer- eller dealer-group-scope. Processen är asynkron och testannonser kan skapas med `visible: false`; dokumentationen anger inget separat testmiljö. Bekräfta med Blocket om en privatperson och vanliga annonser kan få lämplig åtkomst innan detta blir en integrationskandidat.
-- **Förstudie 2026-09-30:** Tradera har officiellt [Developer Program](https://api.tradera.com/documentation) och [REST API v4](https://api.tradera.com/v4/swagger/index.html), inklusive flöden för att skapa listningar. Dokumentationen anger app-nycklar och användarautentisering; publicering kräver separat bekräftelse av användaren. `autoCommit: false` verkar kunna validera/skapa ett opublicerat utkast som sedan behöver explicit commit. Bekräfta utvecklarregistrering, behörighet för vanliga säljkonton, kostnader och detta testflöde direkt i portalen innan integration påbörjas.
+- **Kontrollerat 2026-09-30 – Blocket:** Det officiella [Pro Import API](https://api.blocket.se/pro-import-api/docs/client-documentation) skapar och hanterar annonser asynkront. Dokumentationen säger att API:t ska användas för att hantera annonser på Blocket/Bytbil, inte för att driva webbplatser eller liknande; dealer-/dealer-group-terminologin gäller även andra slags företagskunder. Det finns ingen separat testmiljö. Dolda annonser (`visible: false`) går till Blocket Admin/API utan att publiceras eller debiteras, och `/validate` kan validera data utan att spara. Behörighet och lämplig användning för appens faktiska konto måste bekräftas med Blocket innan integration.
+- **Kontrollerat 2026-09-30 – Tradera:** Officiella [Developer Program-dokumentationen](https://api.tradera.com/documentation) beskriver REST API v4. API-åtkomst kräver app-id/app-nyckel och användarautentisering för handlingar på ett säljkonto. `autoCommit: false` kan användas för att validera en listning utan att publicera den; publicering sker i ett separat commit-steg. Den aktuella v4-dokumentationen anger inget sandbox-miljöflöde, så detta är inte likvärdigt med ett isolerat testkonto. Bekräfta utvecklarregistrering, autentisering/behörighet för det avsedda kontot, eventuella villkor och testförfarandet i portalen innan integration påbörjas.
 - Fråga tjänstens support om API-åtkomst kräver partnergodkännande eller särskild kontotyp.
 - Jämför officiell direktpublicering med fortsatt manuell publicering från färdiga utkast.
 - Undvik skärmskrapning eller automatiserad webbläsarinloggning om tjänsten inte erbjuder och tillåter ett stabilt gränssnitt.
-**Beslutspunkt:** Tradera ser ut som bästa kandidat för ett avgränsat tekniskt proof-of-concept, men gå vidare först när en utvecklarapp och testbehörighet bekräftats. Blocket kräver först ett tydligt svar från support om konto- och annonsbehörighet för den här appens användning. Annars fortsätt med manuella utkast.
+**Beslutspunkt:** Tradera är fortsatt den rimligaste kandidaten för ett avgränsat proof-of-concept, men det finns inget dokumenterat v4-sandboxflöde; börja därför endast efter att utvecklarapp, autentisering och säkert testförfarande har bekräftats. Blocket kräver först ett tydligt svar från support om behörighet och användning för det avsedda kontot. Fortsätt annars med manuella utkast.
 
 ### Etapp 3 – Produktionssättning och datahållbarhet
 **Mål:** Köra pilotversionen på en skyddad miljö med verifierad återställning.
